@@ -1,4 +1,3 @@
-import { invoke } from '@tauri-apps/api/core';
 import { serverFetch } from '../lemonade/client';
 import { REQUIRED_MODELS } from '../lemonade/models';
 import toolDefinitions from './toolDefinitions.json';
@@ -38,13 +37,15 @@ interface ChatCompletionResponse {
   }>;
 }
 
+import { StoryOutcome } from '../story/types';
+
 export interface TurnOutput {
-  narration: string;       // markdown the assistant produced for this turn
-  imageB64?: string;       // base64 PNG saved for this turn (if any)
-  audioB64?: string;       // base64 audio saved for this turn (if any)
+  narration: string;
+  imageB64?: string;
+  audioB64?: string;
   audioMime?: string;
   ended?: boolean;
-  outcome?: string;
+  outcome?: StoryOutcome;
   epilogue?: string;
 }
 
@@ -68,6 +69,11 @@ export type AgentActivity =
   | { kind: 'final' };
 
 const omniToolNames = new Set(['generate_image', 'edit_image', 'text_to_speech']);
+
+function normalizeOutcome(value: unknown): StoryOutcome {
+  if (value === 'win' || value === 'loss' || value === 'complete') return value;
+  return 'complete';
+}
 
 function activeTools(): ChatTool[] {
   return (toolDefinitions.tools as Array<ChatTool & { requires_role?: string }>).map(
@@ -151,11 +157,13 @@ async function dispatchTool(
     case 'upsert_character':
       await storyApi.upsertCharacter(ctx.storyId, args.name ?? '', args.content ?? '');
       return `Character ${args.name} saved.`;
-    case 'end_story':
+    case 'end_story': {
+      const outcome = normalizeOutcome(args.outcome);
       ctx.output.ended = true;
-      ctx.output.outcome = args.outcome ?? 'complete';
+      ctx.output.outcome = outcome;
       ctx.output.epilogue = args.epilogue ?? '';
-      return `Story marked as ${args.outcome ?? 'complete'}.`;
+      return `Story marked as ${outcome}.`;
+    }
     default:
       return `Unknown tool: ${name}`;
   }
@@ -210,6 +218,8 @@ export async function runTurn(input: RunTurnInput): Promise<TurnOutput> {
     }
 
     // Push the assistant message (with tool_calls) so the model has its own context
+    // on the next iteration — without it, OpenAI-compatible servers reject the
+    // follow-up 'tool' messages with an "orphaned tool call" error.
     messages.push({
       role: 'assistant',
       content: msg.content ?? '',
@@ -237,7 +247,7 @@ export async function runTurn(input: RunTurnInput): Promise<TurnOutput> {
   return output;
 }
 
-/** Use the chat model to invent a short title + thumbnail prompt for a new story. */
+/** Use the chat model to invent a short title for a new story. */
 export async function nameNewStory(seedPrompt: string, signal?: AbortSignal): Promise<{ title: string; imagePrompt: string }> {
   const resp = await serverFetch('/api/v1/chat/completions', {
     method: 'POST',
@@ -276,5 +286,3 @@ export async function nameNewStory(seedPrompt: string, signal?: AbortSignal): Pr
   }
 }
 
-// Re-export so callers can subscribe to invoked Tauri storage commands too
-export { invoke };

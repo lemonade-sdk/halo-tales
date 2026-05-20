@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { TimelineEntry } from '../story/types';
 import { TurnCard } from './TurnCard';
 
@@ -14,13 +14,15 @@ export function Timeline({ storyId, entries, liveSeq, onEdit }: Props): React.JS
   const ref = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    // row-reverse: the newest card sits at the left of the DOM order;
-    // we want the scroll position pinned to scrollLeft=0 so it stays visible.
+    // flex-direction: row-reverse means the newest card is first in DOM
+    // order; pin scrollLeft=0 so it stays visible after each new turn.
     if (ref.current) ref.current.scrollLeft = 0;
   }, [entries.length]);
 
-  // Render newest first so flex-direction: row-reverse displays them on the right edge.
-  const sorted = [...entries].sort((a, b) => b.seq - a.seq);
+  const sorted = useMemo(
+    () => [...entries].sort((a, b) => b.seq - a.seq),
+    [entries],
+  );
 
   return (
     <div className="timeline" ref={ref}>

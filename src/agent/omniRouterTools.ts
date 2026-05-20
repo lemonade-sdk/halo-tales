@@ -1,5 +1,6 @@
 import { serverFetch } from '../lemonade/client';
 import { REQUIRED_MODELS } from '../lemonade/models';
+import { b64ToBytes, bytesToB64 } from '../util/base64';
 
 export interface ImageGenResult {
   b64: string;
@@ -46,10 +47,11 @@ export async function editImage(
   form.append('response_format', 'b64_json');
   form.append('n', '1');
   form.append('size', IMAGE_SIZE);
-  const bin = atob(sourcePngB64);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  form.append('image', new Blob([bytes], { type: 'image/png' }), 'source.png');
+  form.append(
+    'image',
+    new Blob([b64ToBytes(sourcePngB64)], { type: 'image/png' }),
+    'source.png',
+  );
   const resp = await serverFetch('/api/v1/images/edits', {
     method: 'POST',
     body: form,
@@ -85,10 +87,7 @@ export async function textToSpeech(
     throw new Error(`text_to_speech failed: HTTP ${resp.status} ${text}`);
   }
   const buf = await resp.arrayBuffer();
-  const u8 = new Uint8Array(buf);
-  let binary = '';
-  for (let i = 0; i < u8.length; i++) binary += String.fromCharCode(u8[i]);
-  return { b64: btoa(binary), mime: 'audio/mpeg' };
+  return { b64: bytesToB64(new Uint8Array(buf)), mime: 'audio/mpeg' };
 }
 
 export async function transcribeAudio(
@@ -97,12 +96,9 @@ export async function transcribeAudio(
   language?: string,
   signal?: AbortSignal,
 ): Promise<string> {
-  const bin = atob(audioB64);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   const ext = mime.includes('wav') ? 'wav' : mime.includes('webm') ? 'webm' : 'mp3';
   const form = new FormData();
-  form.append('file', new Blob([bytes], { type: mime }), `input.${ext}`);
+  form.append('file', new Blob([b64ToBytes(audioB64)], { type: mime }), `input.${ext}`);
   form.append('model', REQUIRED_MODELS.stt);
   if (language) form.append('language', language);
   const resp = await serverFetch('/api/v1/audio/transcriptions', {

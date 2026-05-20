@@ -35,7 +35,9 @@ class LifecycleController {
   }
 
   private update(patch: Partial<LifecycleState>): void {
-    this.state = { ...this.state, ...patch };
+    const next = { ...this.state, ...patch };
+    if (statesEqual(this.state, next)) return;
+    this.state = next;
     for (const l of this.listeners) {
       try {
         l(this.state);
@@ -51,6 +53,8 @@ class LifecycleController {
 
   async start(): Promise<void> {
     if (this.starting && this.state.stage !== 'error') return this.starting;
+    // Fresh run: clear any cached endpoint/error from a prior attempt so
+    // listeners see the new probing→ready trajectory cleanly.
     this.state = { stage: 'probing' };
     this.starting = this.run().catch((e) => {
       console.error('[lifecycle] failed:', e);
@@ -181,6 +185,17 @@ class LifecycleController {
       }
     }
   }
+}
+
+function statesEqual(a: LifecycleState, b: LifecycleState): boolean {
+  return (
+    a.stage === b.stage &&
+    a.message === b.message &&
+    a.progress === b.progress &&
+    a.pulling === b.pulling &&
+    a.error === b.error &&
+    a.endpoint === b.endpoint
+  );
 }
 
 export const lifecycle = new LifecycleController();

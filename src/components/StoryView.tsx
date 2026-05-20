@@ -17,17 +17,18 @@ export function StoryView({ storyId, onBack, onError }: Props): React.JSX.Elemen
   const [wikiOpen, setWikiOpen] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
 
-  // Surface any load-failure from the hook to the App-level toast
   useEffect(() => {
     if (story.error) onError(story.error);
   }, [story.error, onError]);
+
 
   async function onSubmit(text: string): Promise<void> {
     if (!story.meta) return;
     setBusy(true);
     setStatusMsg('Storyteller thinking…');
     try {
-      const result = await advanceStory(storyId, text);
+      const lastImage = lastImageFilename(story.timeline);
+      const result = await advanceStory(storyId, text, lastImage);
       story.appendEntries([result.user, result.scene], result.scene.seq);
       if (result.output.ended) {
         story.setMeta({
@@ -85,12 +86,18 @@ export function StoryView({ storyId, onBack, onError }: Props): React.JSX.Elemen
       {wikiOpen && (
         <WikiPanel
           storyId={storyId}
-          onClose={() => {
-            setWikiOpen(false);
-            void story.refresh();
-          }}
+          timeline={story.timeline}
+          onTimelineChange={story.refresh}
+          onClose={() => setWikiOpen(false)}
         />
       )}
     </>
   );
+}
+
+function lastImageFilename(timeline: readonly { image: string | null }[]): string | undefined {
+  for (let i = timeline.length - 1; i >= 0; i--) {
+    if (timeline[i].image) return timeline[i].image ?? undefined;
+  }
+  return undefined;
 }

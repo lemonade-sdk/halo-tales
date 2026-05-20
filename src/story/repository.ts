@@ -33,22 +33,24 @@ export interface NewStoryOutput {
 
 /** Drive the full "create a new story" flow: name it, persist it, run the opening turn. */
 export async function createNewStory(seedPrompt: string, signal?: AbortSignal): Promise<NewStoryOutput> {
-  const { title, imagePrompt: _ignored } = await nameNewStory(seedPrompt, signal);
-  void _ignored;
-  const meta = await invoke<StoryMeta>('create_story', { title, seedPrompt });
-
-  const turn: TurnOutput = await runTurn({
-    storyId: meta.id,
-    userInput: seedPrompt,
-    opening: true,
-    signal,
+  // Create the directory with a placeholder title so the agent's opening
+  // turn can run in parallel with title generation. Both prompts are
+  // independent inferences; in serial that's the title's ~5s on top of the
+  // opening turn's tens-of-seconds.
+  const meta = await invoke<StoryMeta>('create_story', {
+    title: 'Untitled story',
+    seedPrompt,
   });
+  const [title, turn] = await Promise.all([
+    nameNewStory(seedPrompt, signal).then((r) => r.title),
+    runTurn({ storyId: meta.id, userInput: seedPrompt, opening: true, signal }),
+  ]);
 
   const opening = await persistTurn(meta.id, 'scene', turn);
-  // Promote the opening image to the story thumbnail.
   if (turn.imageB64) {
     await invoke<string>('write_thumbnail', { storyId: meta.id, pngB64: turn.imageB64 });
   }
+  await repo.updateMeta({ ...meta, title });
   return { meta: await repo.load(meta.id), opening };
 }
 
@@ -93,43 +95,28 @@ export async function persistTurn(
 export async function advanceStory(
   storyId: string,
   userText: string,
+  lastImageRelative?: string,
   signal?: AbortSignal,
 ): Promise<{ user: TimelineEntry; scene: TimelineEntry; output: TurnOutput }> {
   const user = await persistUserTurn(storyId, userText);
-  // Rehydrate the most recent illustration (if any) as a base64 PNG so the
-  // agent's edit_image tool can use it as a source on the first turn after
-  // an app reload. Without this, edit_image falls back to generate_image.
-  const lastImageB64 = await loadMostRecentImage(storyId);
-  const output = await runTurn({
-    storyId,
-    userInput: userText,
-    lastImageB64,
-    signal,
-  });
+  // Rehydrate the most recent illustration (if any) so the agent's
+  // edit_image tool has a source PNG after an app reload.
+  let lastImageB64: string | undefined;
+  if (lastImageRelative) {
+    try {
+      lastImageB64 = await invoke<string>('read_artifact_b64', {
+        storyId,
+        relative: lastImageRelative,
+      });
+    } catch (e) {
+      console.warn('[advanceStory] failed to load prior image; edit_image will fall back', e);
+    }
+  }
+  const output = await runTurn({ storyId, userInput: userText, lastImageB64, signal });
   const scene = await persistTurn(storyId, 'scene', output);
   if (output.ended) {
     const meta = await repo.load(storyId);
     await repo.updateMeta({ ...meta, status: 'ended', outcome: output.outcome ?? 'complete' });
   }
   return { user, scene, output };
-}
-
-async function loadMostRecentImage(storyId: string): Promise<string | undefined> {
-  try {
-    const entries = await repo.listTimeline(storyId);
-    // Walk from newest to oldest looking for an entry with a saved image.
-    for (let i = entries.length - 1; i >= 0; i--) {
-      const entry = entries[i];
-      if (entry.image) {
-        const b64 = await invoke<string>('read_artifact_b64', {
-          storyId,
-          relative: entry.image,
-        });
-        if (b64) return b64;
-      }
-    }
-  } catch (e) {
-    console.warn('[advanceStory] failed to load prior image; edit_image will fall back', e);
-  }
-  return undefined;
 }

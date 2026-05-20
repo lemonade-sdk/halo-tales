@@ -7,31 +7,32 @@ import { EditableMarkdown } from './MarkdownView';
 
 interface Props {
   storyId: string;
+  timeline: TimelineEntry[];
+  onTimelineChange: () => void;
   onClose: () => void;
 }
 
 type Tab = 'synopsis' | 'characters' | 'timeline';
 
-export function WikiPanel({ storyId, onClose }: Props): React.JSX.Element {
+export function WikiPanel({ storyId, timeline, onTimelineChange, onClose }: Props): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('synopsis');
   const [synopsis, setSynopsis] = useState('');
   const [characters, setCharacters] = useState<CharacterEntry[]>([]);
-  const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [newCharName, setNewCharName] = useState('');
 
   useEffect(() => {
-    load();
+    void loadWikiOnly();
   }, [storyId]);
 
-  async function load(): Promise<void> {
-    const [s, c, t] = await Promise.all([
+  // Only synopsis + characters are wiki-private. Timeline is owned by the
+  // parent's useCurrentStory hook, so changes to it propagate automatically.
+  async function loadWikiOnly(): Promise<void> {
+    const [s, c] = await Promise.all([
       storyApi.readStorySummary(storyId),
       storyApi.listCharacters(storyId),
-      repo.listTimeline(storyId),
     ]);
     setSynopsis(s);
     setCharacters(c);
-    setTimeline(t);
   }
 
   async function saveSynopsis(next: string): Promise<void> {
@@ -61,13 +62,13 @@ export function WikiPanel({ storyId, onClose }: Props): React.JSX.Element {
 
   async function saveTimeline(seq: number, markdown: string): Promise<void> {
     await repo.writeTimelineEntry(storyId, seq, markdown);
-    setTimeline((arr) => arr.map((t) => (t.seq === seq ? { ...t, markdown } : t)));
+    onTimelineChange();
   }
 
   async function deleteTimelineEntry(seq: number): Promise<void> {
     if (!confirm(`Delete timeline entry ${seq}?`)) return;
     await repo.deleteTimelineEntry(storyId, seq);
-    setTimeline((arr) => arr.filter((t) => t.seq !== seq));
+    onTimelineChange();
   }
 
   return (

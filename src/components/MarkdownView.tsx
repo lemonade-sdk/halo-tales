@@ -35,6 +35,7 @@ export function EditableMarkdown({ source, onSave, placeholder, rows = 6 }: Edit
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(source);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
+  const html = useMemo(() => md.render(source ?? ''), [source]);
 
   useEffect(() => {
     setDraft(source);
@@ -93,7 +94,7 @@ export function EditableMarkdown({ source, onSave, placeholder, rows = 6 }: Edit
       title="Click to edit"
     >
       {source.trim()
-        ? <div dangerouslySetInnerHTML={{ __html: md.render(source) }} />
+        ? <div dangerouslySetInnerHTML={{ __html: html }} />
         : <p style={{ color: 'var(--fg-muted)' }}>{placeholder ?? 'Click to add…'}</p>}
     </div>
   );

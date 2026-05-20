@@ -27,6 +27,25 @@ export function App(): React.JSX.Element {
 
   const ready = lifecycleState.stage === 'ready';
 
+  function renderBody(): React.JSX.Element {
+    if (!ready) return <SetupScreen state={lifecycleState} onRetry={retry} />;
+    if (screen.name === 'start') {
+      return (
+        <StartScreen
+          onOpen={(id) => setScreen({ name: 'story', id })}
+          onError={setToast}
+        />
+      );
+    }
+    return (
+      <StoryView
+        storyId={screen.id}
+        onBack={() => setScreen({ name: 'start' })}
+        onError={setToast}
+      />
+    );
+  }
+
   return (
     <div className="app">
       <header className="app-header">
@@ -42,22 +61,7 @@ export function App(): React.JSX.Element {
         )}
       </header>
 
-      <div className="app-body">
-        {!ready ? (
-          <SetupScreen state={lifecycleState} onRetry={retry} />
-        ) : screen.name === 'start' ? (
-          <StartScreen
-            onOpen={(id) => setScreen({ name: 'story', id })}
-            onError={(msg) => setToast(msg)}
-          />
-        ) : (
-          <StoryView
-            storyId={screen.id}
-            onBack={() => setScreen({ name: 'start' })}
-            onError={(msg) => setToast(msg)}
-          />
-        )}
-      </div>
+      <div className="app-body">{renderBody()}</div>
 
       <StatusBar state={lifecycleState} />
       {toast && <div className="toast">{toast}</div>}

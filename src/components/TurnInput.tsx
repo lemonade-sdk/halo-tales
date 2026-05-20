@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { transcribeAudio } from '../agent/omniRouterTools';
+import { blobToB64 } from '../util/base64';
 
 interface Props {
   disabled: boolean;
@@ -45,11 +46,7 @@ export function TurnInput({ disabled, onSubmit }: Props): React.JSX.Element {
   async function sendForTranscription(blob: Blob): Promise<void> {
     setTranscribing(true);
     try {
-      const buf = await blob.arrayBuffer();
-      const u8 = new Uint8Array(buf);
-      let bin = '';
-      for (let i = 0; i < u8.length; i++) bin += String.fromCharCode(u8[i]);
-      const b64 = btoa(bin);
+      const b64 = await blobToB64(blob);
       const text = await transcribeAudio(b64, blob.type || 'audio/webm');
       setValue((v) => (v ? v + ' ' + text : text));
     } catch (e) {

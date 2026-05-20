@@ -1,4 +1,5 @@
 use anyhow::{bail, Context, Result};
+use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -246,7 +247,9 @@ pub fn read_timeline_entry(story_id: &str, seq: u32) -> Result<TimelineEntry> {
 pub fn write_timeline_entry(story_id: &str, seq: u32, markdown: &str) -> Result<()> {
     let dir = paths::story_dir(story_id);
     let timeline = dir.join("timeline");
-    // Find the existing .md file for this seq; if absent, default to scene.
+    // Preserve the existing role suffix when overwriting — a user turn must
+    // stay 0042-user.md, not collapse into 0042-scene.md. Default to scene
+    // only if no entry currently exists at this seq.
     let mut existing: Option<String> = None;
     if timeline.exists() {
         for entry in fs::read_dir(&timeline)? {
@@ -358,49 +361,15 @@ pub fn delete_character(story_id: &str, name: &str) -> Result<()> {
 /// as standard base64. Used to rehydrate the most recent illustration so the
 /// agent's edit_image tool has a source PNG after an app reload.
 pub fn read_artifact_b64(story_id: &str, relative: &str) -> Result<String> {
-    let dir = paths::story_dir(story_id);
-    // Defense-in-depth: reject traversal attempts up front. The renderer
-    // already passes sanitized story-relative filenames (e.g. "0003-scene.png"),
-    // but a future caller could pass anything.
+    // Defense-in-depth: reject traversal attempts. The renderer already
+    // passes sanitized story-relative filenames, but a future caller could
+    // pass anything.
     if relative.contains("..") || relative.starts_with('/') || relative.contains('\\') {
         bail!("invalid relative path: {relative}");
     }
-    let path = dir.join(relative);
-    if !path.exists() {
-        bail!("artifact not found: {relative}");
-    }
-    let bytes = fs::read(&path)?;
-    Ok(base64_encode(&bytes))
-}
-
-fn base64_encode(bytes: &[u8]) -> String {
-    const ALPHA: &[u8; 64] =
-        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity((bytes.len() + 2) / 3 * 4);
-    let mut i = 0;
-    while i + 3 <= bytes.len() {
-        let n = ((bytes[i] as u32) << 16) | ((bytes[i + 1] as u32) << 8) | bytes[i + 2] as u32;
-        out.push(ALPHA[((n >> 18) & 63) as usize] as char);
-        out.push(ALPHA[((n >> 12) & 63) as usize] as char);
-        out.push(ALPHA[((n >> 6) & 63) as usize] as char);
-        out.push(ALPHA[(n & 63) as usize] as char);
-        i += 3;
-    }
-    let rem = bytes.len() - i;
-    if rem == 1 {
-        let n = (bytes[i] as u32) << 16;
-        out.push(ALPHA[((n >> 18) & 63) as usize] as char);
-        out.push(ALPHA[((n >> 12) & 63) as usize] as char);
-        out.push('=');
-        out.push('=');
-    } else if rem == 2 {
-        let n = ((bytes[i] as u32) << 16) | ((bytes[i + 1] as u32) << 8);
-        out.push(ALPHA[((n >> 18) & 63) as usize] as char);
-        out.push(ALPHA[((n >> 12) & 63) as usize] as char);
-        out.push(ALPHA[((n >> 6) & 63) as usize] as char);
-        out.push('=');
-    }
-    out
+    let path = paths::story_dir(story_id).join(relative);
+    let bytes = fs::read(&path).with_context(|| format!("read artifact {relative}"))?;
+    Ok(STANDARD.encode(&bytes))
 }
 
 pub fn write_thumbnail(story_id: &str, png_b64: &str) -> Result<String> {
@@ -408,7 +377,6 @@ pub fn write_thumbnail(story_id: &str, png_b64: &str) -> Result<String> {
     fs::create_dir_all(&dir)?;
     let bytes = base64_decode(png_b64).context("decode thumbnail base64")?;
     fs::write(dir.join("thumbnail.png"), bytes)?;
-    // Update meta to point at it
     let meta_path = dir.join("meta.json");
     if let Ok(meta_bytes) = fs::read(&meta_path) {
         if let Ok(mut meta) = serde_json::from_slice::<StoryMeta>(&meta_bytes) {
@@ -421,45 +389,5 @@ pub fn write_thumbnail(story_id: &str, png_b64: &str) -> Result<String> {
 }
 
 fn base64_decode(s: &str) -> Result<Vec<u8>> {
-    // tiny portable base64 decoder so we don't pull in another crate.
-    const TBL: [i8; 256] = {
-        let mut t = [-1i8; 256];
-        let mut i = 0u8;
-        while i < 26 {
-            t[(b'A' + i) as usize] = i as i8;
-            t[(b'a' + i) as usize] = (i + 26) as i8;
-            i += 1;
-        }
-        let mut i = 0u8;
-        while i < 10 {
-            t[(b'0' + i) as usize] = (i + 52) as i8;
-            i += 1;
-        }
-        t[b'+' as usize] = 62;
-        t[b'/' as usize] = 63;
-        t[b'-' as usize] = 62; // url-safe
-        t[b'_' as usize] = 63; // url-safe
-        t
-    };
-    let trimmed: Vec<u8> = s
-        .bytes()
-        .filter(|b| !b.is_ascii_whitespace() && *b != b'=')
-        .collect();
-    let mut out = Vec::with_capacity(trimmed.len() * 3 / 4);
-    let mut buf: u32 = 0;
-    let mut bits: u32 = 0;
-    for b in trimmed {
-        let v = TBL[b as usize];
-        if v < 0 {
-            bail!("invalid base64 character: {}", b);
-        }
-        buf = (buf << 6) | v as u32;
-        bits += 6;
-        if bits >= 8 {
-            bits -= 8;
-            out.push((buf >> bits) as u8);
-            buf &= (1 << bits) - 1;
-        }
-    }
-    Ok(out)
+    STANDARD.decode(s.trim()).context("decode base64")
 }

@@ -5,7 +5,23 @@ import { editImage, generateImage, textToSpeech } from './omniRouterTools';
 import { storyApi } from './storyTools';
 import { buildSystemPrompt, STORY_OPENING_INSTRUCTION, TURN_CONTINUATION_INSTRUCTION } from './systemPrompts';
 
-const MAX_TOOL_ITERATIONS = 8;
+const MAX_TOOL_ITERATIONS = 5;
+
+const STORY_CHAT_OPTIONS = {
+  temperature: 0.55,
+  top_p: 0.85,
+  top_k: 20,
+  max_tokens: 900,
+  chat_template_kwargs: { enable_thinking: false },
+};
+
+const TITLE_CHAT_OPTIONS = {
+  temperature: 0.35,
+  top_p: 0.8,
+  top_k: 20,
+  max_tokens: 96,
+  chat_template_kwargs: { enable_thinking: false },
+};
 
 interface ChatTool {
   type: 'function';
@@ -36,6 +52,8 @@ interface ChatCompletionResponse {
     finish_reason?: string;
   }>;
 }
+
+type ChatCompletionRequest = Record<string, unknown>;
 
 import { StoryOutcome } from '../story/types';
 
@@ -79,6 +97,39 @@ function activeTools(): ChatTool[] {
   return (toolDefinitions.tools as Array<ChatTool & { requires_role?: string }>).map(
     ({ function: f }) => ({ type: 'function', function: f }),
   );
+}
+
+function standardChatBody(body: ChatCompletionRequest): ChatCompletionRequest {
+  const {
+    top_k: _topK,
+    chat_template_kwargs: _chatTemplateKwargs,
+    ...standard
+  } = body;
+  return standard;
+}
+
+async function postChatCompletion(
+  body: ChatCompletionRequest,
+  signal?: AbortSignal,
+): Promise<Response> {
+  const resp = await serverFetch('/api/v1/chat/completions', {
+    method: 'POST',
+    body,
+    signal,
+  });
+  if (resp.ok || (resp.status !== 400 && resp.status !== 422)) return resp;
+
+  const text = await resp.text().catch(() => '');
+  if (!('top_k' in body) && !('chat_template_kwargs' in body)) {
+    throw new Error(`chat/completions failed: HTTP ${resp.status} ${text}`);
+  }
+
+  console.warn('[agent] tuned chat options rejected; retrying with standard options:', text);
+  return serverFetch('/api/v1/chat/completions', {
+    method: 'POST',
+    body: standardChatBody(body),
+    signal,
+  });
 }
 
 async function buildContext(storyId: string): Promise<ChatMessage[]> {
@@ -190,19 +241,13 @@ export async function runTurn(input: RunTurnInput): Promise<TurnOutput> {
 
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
     ctx.onActivity?.({ kind: 'thinking' });
-    const resp = await serverFetch('/api/v1/chat/completions', {
-      method: 'POST',
-      body: {
-        model: REQUIRED_MODELS.chat,
-        messages,
-        tools,
-        tool_choice: 'auto',
-        temperature: 0.9,
-        top_p: 0.95,
-        max_tokens: 1200,
-      },
-      signal,
-    });
+    const resp = await postChatCompletion({
+      model: REQUIRED_MODELS.chat,
+      messages,
+      tools,
+      tool_choice: 'auto',
+      ...STORY_CHAT_OPTIONS,
+    }, signal);
     if (!resp.ok) {
       const text = await resp.text().catch(() => '');
       throw new Error(`chat/completions failed: HTTP ${resp.status} ${text}`);
@@ -249,26 +294,21 @@ export async function runTurn(input: RunTurnInput): Promise<TurnOutput> {
 
 /** Use the chat model to invent a short title for a new story. */
 export async function nameNewStory(seedPrompt: string, signal?: AbortSignal): Promise<{ title: string; imagePrompt: string }> {
-  const resp = await serverFetch('/api/v1/chat/completions', {
-    method: 'POST',
-    body: {
-      model: REQUIRED_MODELS.chat,
-      messages: [
-        {
-          role: 'system',
-          content:
-            'You name new interactive stories. Reply with strict JSON only: {"title": string (4-7 words, no quotes), "imagePrompt": string (a vivid 1-sentence cover-art prompt)}.',
-        },
-        {
-          role: 'user',
-          content: `Seed: ${seedPrompt}\n\nReturn the JSON only.`,
-        },
-      ],
-      temperature: 0.8,
-      max_tokens: 200,
-    },
-    signal,
-  });
+  const resp = await postChatCompletion({
+    model: REQUIRED_MODELS.chat,
+    messages: [
+      {
+        role: 'system',
+        content:
+          'You name new interactive stories. Reply with strict JSON only: {"title": string (4-7 words, no quotes), "imagePrompt": string (a vivid 1-sentence cover-art prompt)}.',
+      },
+      {
+        role: 'user',
+        content: `Seed: ${seedPrompt}\n\nReturn the JSON only.`,
+      },
+    ],
+    ...TITLE_CHAT_OPTIONS,
+  }, signal);
   if (!resp.ok) throw new Error('nameNewStory: HTTP ' + resp.status);
   const data = await resp.json();
   const raw: string = data?.choices?.[0]?.message?.content ?? '';
@@ -285,4 +325,3 @@ export async function nameNewStory(seedPrompt: string, signal?: AbortSignal): Pr
     return { title: 'Untitled story', imagePrompt: seedPrompt };
   }
 }
-

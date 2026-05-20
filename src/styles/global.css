@@ -158,6 +158,12 @@ textarea:focus, input:focus {
   background: var(--accent);
   transition: width 0.2s linear;
 }
+.progress-meta {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
 .setup-error {
   color: var(--danger);
   background: rgba(255, 107, 107, 0.12);
@@ -184,12 +190,86 @@ textarea:focus, input:focus {
 .new-story-prompt textarea {
   min-height: 88px;
 }
+.warmup-status {
+  min-height: 18px;
+  margin: -20px 0 28px;
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+
+/* Story generation */
+.generating {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+}
+.generating-panel {
+  width: 620px;
+  max-width: 100%;
+}
+.generating-panel h2 {
+  margin: 0 0 8px;
+  font-weight: 600;
+}
+.generating-panel .lede {
+  color: var(--fg-dim);
+  margin: 0 0 24px;
+  line-height: 1.5;
+}
+.generation-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.generation-item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  color: var(--fg-dim);
+  font-size: 15px;
+}
+.generation-item.done { color: var(--fg); }
+.generation-item.error { color: var(--danger); }
+.generation-dot {
+  width: 12px;
+  height: 12px;
+  margin-top: 5px;
+  border-radius: 50%;
+  border: 1px solid var(--fg-muted);
+  flex-shrink: 0;
+}
+.generation-item.active .generation-dot {
+  border-color: var(--accent);
+  border-top-color: transparent;
+  background: transparent;
+  box-shadow: 0 0 12px rgba(255, 184, 107, 0.35);
+  animation: spin 1s linear infinite;
+}
+.generation-item.done .generation-dot {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.generation-item.error .generation-dot {
+  border-color: var(--danger);
+  background: var(--danger);
+}
+.generation-detail {
+  margin-top: 3px;
+  color: var(--fg-muted);
+  font-size: 13px;
+}
 .story-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 20px;
 }
 .story-card {
+  position: relative;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -201,6 +281,37 @@ textarea:focus, input:focus {
 .story-card:hover {
   transform: translateY(-3px);
   border-color: var(--accent-dim);
+}
+.story-delete {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  background: var(--danger);
+  color: #ffffff;
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 700;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease, filter 0.12s ease;
+}
+.story-card:hover .story-delete,
+.story-delete:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+.story-delete:hover {
+  background: var(--danger);
+  filter: brightness(1.08);
 }
 .story-card .cover {
   aspect-ratio: 16 / 10;

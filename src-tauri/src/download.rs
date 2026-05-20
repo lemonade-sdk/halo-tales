@@ -10,6 +10,7 @@ pub struct DownloadProgress {
     pub stage: String, // "download" | "extract" | "done"
     pub bytes: u64,
     pub total: u64,
+    pub bytes_per_second: u64,
     pub message: String,
 }
 
@@ -38,19 +39,27 @@ pub async fn download_to_file<R: Runtime>(
     let mut file = File::create(dest_path)?;
     let mut downloaded: u64 = 0;
     let mut stream = resp.bytes_stream();
+    let started = std::time::Instant::now();
     let mut last_emit = std::time::Instant::now();
     while let Some(chunk) = stream.next().await {
         let chunk = chunk?;
         file.write_all(&chunk)?;
         downloaded += chunk.len() as u64;
         if last_emit.elapsed().as_millis() > 250 {
+            let rate = rate(downloaded, started);
             let _ = app.emit(
                 progress_event,
                 DownloadProgress {
                     stage: "download".into(),
                     bytes: downloaded,
                     total,
-                    message: format!("{} / {}", human(downloaded), human(total)),
+                    bytes_per_second: rate,
+                    message: format!(
+                        "{} / {} at {}/s",
+                        human(downloaded),
+                        human(total),
+                        human(rate)
+                    ),
                 },
             );
             last_emit = std::time::Instant::now();
@@ -63,6 +72,7 @@ pub async fn download_to_file<R: Runtime>(
             stage: "download".into(),
             bytes: downloaded,
             total,
+            bytes_per_second: rate(downloaded, started),
             message: "download complete".into(),
         },
     );
@@ -238,5 +248,14 @@ fn human(bytes: u64) -> String {
         format!("{:.0} KB", bytes as f64 / KB as f64)
     } else {
         format!("{} B", bytes)
+    }
+}
+
+fn rate(bytes: u64, started: std::time::Instant) -> u64 {
+    let secs = started.elapsed().as_secs_f64();
+    if secs > 0.0 {
+        (bytes as f64 / secs) as u64
+    } else {
+        0
     }
 }

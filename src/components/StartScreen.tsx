@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { repo, artifactUrl, createNewStory } from '../story/repository';
+import { confirm } from '@tauri-apps/plugin-dialog';
+import { repo, artifactUrl } from '../story/repository';
 import { StoryMeta } from '../story/types';
+import { warmStoryteller } from '../lemonade/warmup';
 
 interface Props {
   onOpen: (id: string) => void;
+  onBegin: (prompt: string) => void;
   onError: (msg: string) => void;
 }
 
@@ -11,13 +14,33 @@ interface CardData extends StoryMeta {
   cover?: string;
 }
 
-export function StartScreen({ onOpen, onError }: Props): React.JSX.Element {
+const DEFAULT_SEED = 'A weather-worn detective walks into a rain-soaked Tokyo alley...';
+
+export function StartScreen({ onOpen, onBegin, onError }: Props): React.JSX.Element {
   const [stories, setStories] = useState<CardData[]>([]);
   const [seed, setSeed] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [warmup, setWarmup] = useState<'loading' | 'ready' | 'error'>('loading');
 
   useEffect(() => {
     refresh();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setWarmup('loading');
+    warmStoryteller()
+      .then(() => {
+        if (!cancelled) setWarmup('ready');
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          console.warn('[start] storyteller warmup failed:', e);
+          setWarmup('error');
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function refresh() {
@@ -41,16 +64,26 @@ export function StartScreen({ onOpen, onError }: Props): React.JSX.Element {
   }
 
   async function onCreate() {
-    if (!seed.trim()) return;
-    setBusy(true);
+    const prompt = seed.trim() || DEFAULT_SEED;
+    setSeed('');
+    onBegin(prompt);
+  }
+
+  async function onDeleteStory(
+    event: React.MouseEvent<HTMLButtonElement>,
+    story: CardData,
+  ): Promise<void> {
+    event.stopPropagation();
+    const ok = await confirm(`Delete "${story.title}"? This cannot be undone.`, {
+      title: 'Delete story',
+      kind: 'warning',
+    });
+    if (!ok) return;
     try {
-      const { meta } = await createNewStory(seed.trim());
-      setSeed('');
-      onOpen(meta.id);
+      await repo.remove(story.id);
+      setStories((current) => current.filter((s) => s.id !== story.id));
     } catch (e) {
-      onError(`Failed to start story: ${String(e)}`);
-    } finally {
-      setBusy(false);
+      onError(`Failed to delete story: ${String(e)}`);
     }
   }
 
@@ -64,9 +97,8 @@ export function StartScreen({ onOpen, onError }: Props): React.JSX.Element {
       <div className="new-story-prompt">
         <textarea
           value={seed}
-          placeholder="A weather-worn detective walks into a rain-soaked Tokyo alley…"
+          placeholder={DEFAULT_SEED}
           onChange={(e) => setSeed(e.target.value)}
-          disabled={busy}
           onKeyDown={(e) => {
             if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
               e.preventDefault();
@@ -74,9 +106,14 @@ export function StartScreen({ onOpen, onError }: Props): React.JSX.Element {
             }
           }}
         />
-        <button className="primary" onClick={onCreate} disabled={busy || !seed.trim()}>
-          {busy ? <span className="dot-loader">Spinning up the story</span> : 'Begin'}
+        <button className="primary" onClick={onCreate}>
+          Begin
         </button>
+      </div>
+      <div className="warmup-status">
+        {warmup === 'loading' && <span className="dot-loader">Loading storyteller</span>}
+        {warmup === 'ready' && 'Storyteller ready'}
+        {warmup === 'error' && 'Storyteller will load when the tale begins'}
       </div>
       <h2>Continue a tale</h2>
       <p className="lede">Your saved stories live in <code>~/.cache/halo-tales</code>.</p>
@@ -86,6 +123,14 @@ export function StartScreen({ onOpen, onError }: Props): React.JSX.Element {
         )}
         {stories.map((s) => (
           <div key={s.id} className="story-card" onClick={() => onOpen(s.id)}>
+            <button
+              className="story-delete"
+              aria-label={`Delete ${s.title}`}
+              title="Delete story"
+              onClick={(e) => void onDeleteStory(e, s)}
+            >
+              ×
+            </button>
             <div
               className="cover"
               style={s.cover ? { backgroundImage: `url("${s.cover}")` } : undefined}

@@ -4,8 +4,10 @@ mod lemonade;
 mod paths;
 mod story_fs;
 
+use tauri::Manager;
+
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
@@ -44,6 +46,15 @@ pub fn run() {
             paths::ensure_root(&app.handle())?;
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|app_handle, event| {
+        if matches!(
+            event,
+            tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
+        ) {
+            app_handle.state::<lemonade::LemonadeState>().stop_embedded();
+        }
+    });
 }

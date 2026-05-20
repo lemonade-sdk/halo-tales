@@ -1,5 +1,4 @@
 use anyhow::{bail, Context, Result};
-use rand::Rng;
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Mutex;
@@ -17,7 +16,7 @@ pub const DEFAULT_LEMONADE_PORT: u16 = 13305;
 /// The release archives are published by the lemonade-sdk team — see
 /// https://lemonade-server.ai/docs/embeddable/ for the canonical
 /// distribution channel.
-const EMBEDDABLE_VERSION: &str = "10.1.0";
+const EMBEDDABLE_VERSION: &str = "10.5.1";
 const EMBEDDABLE_BASE_URL: &str =
     "https://github.com/lemonade-sdk/lemonade/releases/download";
 
@@ -63,8 +62,18 @@ impl LemonadeState {
         }
     }
 
-    pub fn take_child(&self) -> Option<Child> {
-        self.inner.lock().ok().and_then(|mut g| g.child.take())
+    pub fn stop_embedded(&self) {
+        if let Ok(mut g) = self.inner.lock() {
+            if let Some(mut child) = g.child.take() {
+                let _ = child.start_kill();
+            }
+            if matches!(
+                g.endpoint.as_ref().map(|ep| &ep.source),
+                Some(EndpointSource::Embedded)
+            ) {
+                g.endpoint = None;
+            }
+        }
     }
 }
 
@@ -148,16 +157,15 @@ pub async fn spawn_embedded<R: Runtime>(app: &AppHandle<R>) -> Result<Endpoint> 
     let bin = embedded_binary_path();
     let dir = paths::embedded_lemonade_dir();
     let port = pick_free_port();
-    let api_key = random_key();
     let mut cmd = Command::new(&bin);
     cmd.arg(".")
         .arg("--port")
         .arg(port.to_string())
         .current_dir(&dir)
-        .env("LEMONADE_API_KEY", &api_key)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
+    configure_child_cleanup(&mut cmd);
 
     let child = cmd
         .spawn()
@@ -167,10 +175,10 @@ pub async fn spawn_embedded<R: Runtime>(app: &AppHandle<R>) -> Result<Endpoint> 
     let base_url = format!("http://127.0.0.1:{port}");
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
     loop {
-        if probe_with_key(&base_url, Some(&api_key)).await.is_ok() {
+        if probe_with_key(&base_url, None).await.is_ok() {
             let endpoint = Endpoint {
                 base_url,
-                api_key: Some(api_key),
+                api_key: None,
                 source: EndpointSource::Embedded,
             };
             state.set_endpoint(endpoint.clone());
@@ -184,13 +192,28 @@ pub async fn spawn_embedded<R: Runtime>(app: &AppHandle<R>) -> Result<Endpoint> 
 }
 
 pub fn pick_free_port() -> u16 {
+    if std::net::TcpListener::bind(("127.0.0.1", DEFAULT_LEMONADE_PORT)).is_ok() {
+        return DEFAULT_LEMONADE_PORT;
+    }
+
     std::net::TcpListener::bind("127.0.0.1:0")
         .and_then(|l| l.local_addr().map(|a| a.port()))
         .unwrap_or(DEFAULT_LEMONADE_PORT)
 }
 
-fn random_key() -> String {
-    let mut rng = rand::thread_rng();
-    let bytes: [u8; 24] = rng.gen();
-    bytes.iter().map(|b| format!("{:02x}", b)).collect()
+#[cfg(target_os = "linux")]
+fn configure_child_cleanup(cmd: &mut Command) {
+    unsafe {
+        cmd.pre_exec(|| {
+            let rc = libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM);
+            if rc == 0 {
+                Ok(())
+            } else {
+                Err(std::io::Error::last_os_error())
+            }
+        });
+    }
 }
+
+#[cfg(not(target_os = "linux"))]
+fn configure_child_cleanup(_cmd: &mut Command) {}

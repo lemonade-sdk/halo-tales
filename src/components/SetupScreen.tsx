@@ -29,10 +29,16 @@ function buildSteps(): Step[] {
       stages: ['downloading_lemonade', 'starting_lemonade'],
       done: (s) => stageIndex(s.stage) > stageIndex('starting_lemonade'),
     },
+    {
+      id: 'check-models',
+      label: 'Checking required models',
+      stages: ['checking_models'],
+      done: (s) => stageIndex(s.stage) > stageIndex('checking_models'),
+    },
     ...roleList.map((role) => ({
       id: `model-${role}`,
       label: `${MODEL_DISPLAY[role].name}`,
-      stages: ['checking_models', 'pulling_model'] as LifecycleStage[],
+      stages: ['pulling_model'] as LifecycleStage[],
       done: (s: LifecycleState) =>
         s.stage === 'ready' ||
         (s.stage === 'pulling_model' && s.pulling !== REQUIRED_MODELS[role] && rolePassed(role, s)),
@@ -76,6 +82,9 @@ export function SetupScreen({ state, onRetry }: Props): React.JSX.Element {
           {steps.map((step, idx) => {
             const done = step.done(state);
             const active = !done && idx === activeStepIdx;
+            const progressMeta = state.progressDetails
+              ? formatProgressMeta(state.progressDetails)
+              : '';
             return (
               <div key={step.id} className="check-row">
                 <span className={`check-icon ${done ? 'done' : active ? 'active' : ''}`} />
@@ -85,9 +94,12 @@ export function SetupScreen({ state, onRetry }: Props): React.JSX.Element {
                     <div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{state.message}</div>
                   )}
                   {active && typeof state.progress === 'number' && (
-                    <div className="progress-bar">
-                      <span style={{ width: `${state.progress}%` }} />
-                    </div>
+                    <>
+                      <div className="progress-bar">
+                        <span style={{ width: `${state.progress}%` }} />
+                      </div>
+                      {progressMeta && <div className="progress-meta">{progressMeta}</div>}
+                    </>
                   )}
                 </div>
               </div>
@@ -107,4 +119,31 @@ export function SetupScreen({ state, onRetry }: Props): React.JSX.Element {
       </div>
     </div>
   );
+}
+
+function formatProgressMeta(details: NonNullable<LifecycleState['progressDetails']>): string {
+  const parts: string[] = [];
+  if (typeof details.downloaded === 'number' && typeof details.total === 'number') {
+    parts.push(`${formatBytes(details.downloaded)} of ${formatBytes(details.total)}`);
+  } else if (typeof details.downloaded === 'number') {
+    parts.push(formatBytes(details.downloaded));
+  } else if (typeof details.total === 'number') {
+    parts.push(formatBytes(details.total));
+  }
+  if (typeof details.rate === 'number' && details.rate > 0) {
+    parts.push(`${formatBytes(details.rate)}/s`);
+  }
+  return parts.join(' · ');
+}
+
+function formatBytes(bytes: number): string {
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  const digits = unit === 0 ? 0 : value >= 100 ? 0 : value >= 10 ? 1 : 2;
+  return `${value.toFixed(digits)} ${units[unit]}`;
 }

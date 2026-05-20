@@ -31,8 +31,8 @@ dirs = "5"
 uuid = { version = "1", features = ["v4"] }
 anyhow = "1"
 thiserror = "1"
-rand = "0.8"
 base64 = "0.22"
+libc = "0.2"
 
 [profile.release]
 strip = true

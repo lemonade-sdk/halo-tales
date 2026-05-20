@@ -27,14 +27,22 @@ export interface LifecycleState {
   endpoint?: LemonadeEndpoint;
   /** percent 0-100 for the current step, or undefined for indeterminate */
   progress?: number;
+  progressDetails?: ProgressDetails;
   /** model id currently being pulled (if any) */
   pulling?: string;
   error?: string;
+}
+
+export interface ProgressDetails {
+  downloaded?: number;
+  total?: number;
+  rate?: number;
 }
 
 export interface DownloadProgress {
   stage: 'download' | 'extract' | 'done';
   bytes: number;
   total: number;
+  bytes_per_second?: number;
   message: string;
 }

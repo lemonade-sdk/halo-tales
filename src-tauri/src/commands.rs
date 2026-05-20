@@ -45,9 +45,7 @@ pub async fn start_embedded_lemonade<R: Runtime>(app: AppHandle<R>) -> Result<En
 #[tauri::command]
 pub async fn stop_embedded_lemonade<R: Runtime>(app: AppHandle<R>) -> Result<()> {
     let state = app.state::<LemonadeState>();
-    if let Some(mut child) = state.take_child() {
-        let _ = child.start_kill();
-    }
+    state.stop_embedded();
     Ok(())
 }
 

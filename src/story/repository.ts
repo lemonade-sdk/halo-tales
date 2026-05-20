@@ -1,5 +1,5 @@
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
-import { runTurn, nameNewStory, TurnOutput } from '../agent/agentLoop';
+import { runTurn, nameNewStory, TurnOutput, AgentActivity } from '../agent/agentLoop';
 import { StoryMeta, TimelineEntry, CharacterEntry } from './types';
 
 export const repo = {
@@ -31,26 +31,48 @@ export interface NewStoryOutput {
   opening: TimelineEntry;
 }
 
+export type NewStoryActivity =
+  | { kind: 'story_created' }
+  | { kind: 'title_start' }
+  | { kind: 'title_done'; title: string }
+  | { kind: 'saving' }
+  | { kind: 'saved' }
+  | { kind: 'agent'; event: AgentActivity };
+
+export interface NewStoryOptions {
+  signal?: AbortSignal;
+  onActivity?: (event: NewStoryActivity) => void;
+}
+
 /** Drive the full "create a new story" flow: name it, persist it, run the opening turn. */
-export async function createNewStory(seedPrompt: string, signal?: AbortSignal): Promise<NewStoryOutput> {
-  // Create the directory with a placeholder title so the agent's opening
-  // turn can run in parallel with title generation. Both prompts are
-  // independent inferences; in serial that's the title's ~5s on top of the
-  // opening turn's tens-of-seconds.
+export async function createNewStory(
+  seedPrompt: string,
+  options: NewStoryOptions = {},
+): Promise<NewStoryOutput> {
+  const { signal, onActivity } = options;
   const meta = await invoke<StoryMeta>('create_story', {
     title: 'Untitled story',
     seedPrompt,
   });
-  const [title, turn] = await Promise.all([
-    nameNewStory(seedPrompt, signal).then((r) => r.title),
-    runTurn({ storyId: meta.id, userInput: seedPrompt, opening: true, signal }),
-  ]);
+  onActivity?.({ kind: 'story_created' });
+  onActivity?.({ kind: 'title_start' });
+  const { title } = await nameNewStory(seedPrompt, signal);
+  onActivity?.({ kind: 'title_done', title });
+  const turn = await runTurn({
+    storyId: meta.id,
+    userInput: seedPrompt,
+    opening: true,
+    signal,
+    onActivity: (event) => onActivity?.({ kind: 'agent', event }),
+  });
 
+  onActivity?.({ kind: 'saving' });
   const opening = await persistTurn(meta.id, 'scene', turn);
   if (turn.imageB64) {
     await invoke<string>('write_thumbnail', { storyId: meta.id, pngB64: turn.imageB64 });
   }
   await repo.updateMeta({ ...meta, title });
+  onActivity?.({ kind: 'saved' });
   return { meta: await repo.load(meta.id), opening };
 }
 

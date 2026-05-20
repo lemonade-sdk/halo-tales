@@ -1,0 +1,66 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build ${{ matrix.platform.label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - { os: ubuntu-latest, label: linux-x86_64, args: '' }
+          - { os: windows-latest, label: windows-x86_64, args: '' }
+          - { os: macos-14, label: macos-arm64, args: '--target aarch64-apple-darwin' }
+          - { os: macos-13, label: macos-x86_64, args: '--target x86_64-apple-darwin' }
+    runs-on: ${{ matrix.platform.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Linux build deps
+        if: matrix.platform.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev \
+            libayatana-appindicator3-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform.label == 'macos-arm64' && 'aarch64-apple-darwin' || matrix.platform.label == 'macos-x86_64' && 'x86_64-apple-darwin' || '' }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      - name: Build & publish via tauri-action
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'HaloTales ${{ github.ref_name }}'
+          releaseBody: |
+            Automated build for ${{ github.ref_name }}.
+
+            Pre-built installers for Windows, macOS, and Linux are attached below.
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.platform.args }}

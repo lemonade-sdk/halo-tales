@@ -1,0 +1,49 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "HaloTales",
+  "version": "../package.json",
+  "identifier": "ai.lemonade.halotales",
+  "build": {
+    "beforeDevCommand": "npm run dev:renderer",
+    "beforeBuildCommand": "npm run build:renderer",
+    "devUrl": "http://localhost:9234",
+    "frontendDist": "../dist/renderer"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "HaloTales",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 900,
+        "minHeight": 600,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["**"]
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app", "dmg", "deb", "rpm", "appimage", "msi", "nsis"],
+    "category": "Entertainment",
+    "shortDescription": "Local-AI creative roleplaying",
+    "longDescription": "HaloTales is an interactive, turn-based storytelling experience powered entirely by local AI through Lemonade's OmniRouter — narration, illustration, and voice acting all run on your hardware.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": [],
+    "linux": {
+      "deb": { "depends": [] }
+    }
+  }
+}

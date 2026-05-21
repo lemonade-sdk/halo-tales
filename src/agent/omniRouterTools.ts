@@ -12,7 +12,9 @@ export interface AudioResult {
   mime: string;
 }
 
-const IMAGE_SIZE = '1024x1024';
+// 2:1 widescreen so the rendered scene fits next to a readable prose column
+// without dominating the card height.
+const IMAGE_SIZE = '512x256';
 
 export async function generateImage(prompt: string, signal?: AbortSignal): Promise<ImageGenResult> {
   const resp = await serverFetch('/api/v1/images/generations', {

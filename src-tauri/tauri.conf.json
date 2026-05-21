@@ -24,7 +24,15 @@
       "csp": null,
       "assetProtocol": {
         "enable": true,
-        "scope": ["**"]
+        "scope": {
+          "allow": [
+            "$HOME/.cache/halo-tales/**",
+            "$HOME/.cache/halo-tales/**/*",
+            "$HOME/.cache/halo-tales/stories/**/*",
+            "**/.cache/halo-tales/**/*"
+          ],
+          "requireLiteralLeadingDot": false
+        }
       }
     }
   },

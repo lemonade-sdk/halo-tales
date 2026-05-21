@@ -1,6 +1,9 @@
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { runTurn, nameNewStory, TurnOutput, AgentActivity } from '../agent/agentLoop';
 import { StoryMeta, TimelineEntry, CharacterEntry } from './types';
+import { makeLogger } from '../util/logger';
+
+const log = makeLogger('story');
 
 export const repo = {
   list: () => invoke<StoryMeta[]>('list_stories'),
@@ -50,14 +53,19 @@ export async function createNewStory(
   options: NewStoryOptions = {},
 ): Promise<NewStoryOutput> {
   const { signal, onActivity } = options;
+  log.info('createNewStory: begin, seed prompt length =', seedPrompt.length);
   const meta = await invoke<StoryMeta>('create_story', {
     title: 'Untitled story',
     seedPrompt,
   });
+  log.info('createNewStory: story_created id =', meta.id);
   onActivity?.({ kind: 'story_created' });
   onActivity?.({ kind: 'title_start' });
+  log.info('createNewStory: naming story...');
   const { title } = await nameNewStory(seedPrompt, signal);
+  log.info('createNewStory: title chosen =', title);
   onActivity?.({ kind: 'title_done', title });
+  log.info('createNewStory: running opening turn');
   const turn = await runTurn({
     storyId: meta.id,
     userInput: seedPrompt,
@@ -65,15 +73,28 @@ export async function createNewStory(
     signal,
     onActivity: (event) => onActivity?.({ kind: 'agent', event }),
   });
+  log.info(
+    'createNewStory: opening turn done — narration chars =',
+    turn.narration.length,
+    'hasImage =',
+    !!turn.imageB64,
+    'hasAudio =',
+    !!turn.audioB64,
+  );
 
   onActivity?.({ kind: 'saving' });
   const opening = await persistTurn(meta.id, 'scene', turn);
   if (turn.imageB64) {
     await invoke<string>('write_thumbnail', { storyId: meta.id, pngB64: turn.imageB64 });
   }
-  await repo.updateMeta({ ...meta, title });
+  // Reload meta first — write_thumbnail just updated the file with a fresh
+  // `thumbnail` field. Using our stale in-memory `meta` here would clobber
+  // that back to null.
+  const current = await repo.load(meta.id);
+  const updated = await repo.updateMeta({ ...current, title });
+  log.info('createNewStory: saved opening turn seq =', opening.seq);
   onActivity?.({ kind: 'saved' });
-  return { meta: await repo.load(meta.id), opening };
+  return { meta: updated, opening };
 }
 
 export async function persistUserTurn(storyId: string, text: string): Promise<TimelineEntry> {

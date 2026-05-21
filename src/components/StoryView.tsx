@@ -62,7 +62,8 @@ export function StoryView({ storyId, onBack, onError }: Props): React.JSX.Elemen
           </div>
           <div className="spacer" />
           {statusMsg && (
-            <div style={{ color: 'var(--fg-dim)', fontSize: 13 }} className="dot-loader">
+            <div style={{ color: 'var(--fg-dim)', fontSize: 13 }}>
+              <span className="spinner" />
               {statusMsg}
             </div>
           )}

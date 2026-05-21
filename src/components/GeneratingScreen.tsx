@@ -10,9 +10,10 @@ export interface GenerationStep {
 interface Props {
   prompt: string;
   steps: GenerationStep[];
+  onCancel?: () => void;
 }
 
-export function GeneratingScreen({ prompt, steps }: Props): React.JSX.Element {
+export function GeneratingScreen({ prompt, steps, onCancel }: Props): React.JSX.Element {
   return (
     <div className="generating">
       <div className="generating-panel">
@@ -31,6 +32,13 @@ export function GeneratingScreen({ prompt, steps }: Props): React.JSX.Element {
               </li>
             ))}
         </ul>
+        {onCancel && (
+          <div style={{ marginTop: 24, textAlign: 'right' }}>
+            <button type="button" onClick={onCancel}>
+              Back to start
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

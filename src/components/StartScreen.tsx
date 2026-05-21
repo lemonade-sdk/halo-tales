@@ -1,8 +1,17 @@
 import React, { useEffect, useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { confirm } from '@tauri-apps/plugin-dialog';
-import { repo, artifactUrl } from '../story/repository';
+import { repo } from '../story/repository';
 import { StoryMeta } from '../story/types';
 import { warmStoryteller } from '../lemonade/warmup';
+import { makeLogger } from '../util/logger';
+
+const log = makeLogger('start');
+
+async function thumbnailDataUrl(storyId: string, relative: string): Promise<string> {
+  const b64 = await invoke<string>('read_artifact_b64', { storyId, relative });
+  return `data:image/png;base64,${b64}`;
+}
 
 interface Props {
   onOpen: (id: string) => void;
@@ -50,9 +59,11 @@ export function StartScreen({ onOpen, onBegin, onError }: Props): React.JSX.Elem
         list.map(async (s) => {
           if (s.thumbnail) {
             try {
-              const url = await artifactUrl(s.id, s.thumbnail);
+              const url = await thumbnailDataUrl(s.id, s.thumbnail);
               return { ...s, cover: url };
-            } catch { /* ignore */ }
+            } catch (e) {
+              log.warn('thumbnail load failed', { id: s.id, thumbnail: s.thumbnail }, e);
+            }
           }
           return s;
         }),

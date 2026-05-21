@@ -56,11 +56,9 @@ export function App(): React.JSX.Element {
       });
       setScreen({ name: 'story', id: meta.id });
     } catch (e) {
-      updateGenerationStep('save', {
-        status: 'error',
-        detail: 'Story generation stopped before it could be saved.',
-      });
-      setToast(`Failed to start story: ${String(e)}`);
+      const detail = e instanceof Error ? e.message : String(e);
+      setToast(`Failed to start story: ${detail}`);
+      setScreen({ name: 'start' });
     }
   }
 
@@ -76,7 +74,13 @@ export function App(): React.JSX.Element {
       );
     }
     if (screen.name === 'generating') {
-      return <GeneratingScreen prompt={screen.prompt} steps={generationSteps} />;
+      return (
+        <GeneratingScreen
+          prompt={screen.prompt}
+          steps={generationSteps}
+          onCancel={() => setScreen({ name: 'start' })}
+        />
+      );
     }
     return (
       <StoryView
@@ -114,9 +118,10 @@ function initialGenerationSteps(): GenerationStep[] {
   return [
     { id: 'story', label: 'Creating story journal', status: 'active' },
     { id: 'title', label: 'Naming the tale', status: 'pending' },
-    { id: 'narration', label: 'Writing the opening scene', status: 'pending' },
+    { id: 'planning', label: 'Planning the scene', status: 'pending' },
     { id: 'image', label: 'Painting the cover scene', status: 'pending' },
     { id: 'audio', label: 'Rendering narration audio', status: 'pending' },
+    { id: 'composing', label: 'Writing the displayed prose', status: 'pending' },
     { id: 'save', label: 'Saving the opening turn', status: 'pending' },
   ];
 }
@@ -136,7 +141,7 @@ function handleGenerationActivity(
       update('title', { status: 'done', detail: activity.title });
       break;
     case 'saving':
-      update('narration', { status: 'done' });
+      update('composing', { status: 'done' });
       update('save', { status: 'active' });
       break;
     case 'saved':
@@ -154,7 +159,9 @@ function handleAgentActivity(
 ): void {
   switch (event.kind) {
     case 'thinking':
-      update('narration', { status: 'active' });
+      // Fired once at the start of the turn — the model is planning what
+      // tools to call before doing anything else.
+      update('planning', { status: 'active' });
       break;
     case 'tool_call':
       if (event.name === 'generate_image' || event.name === 'edit_image') {
@@ -169,8 +176,14 @@ function handleAgentActivity(
     case 'audio_done':
       update('audio', { status: 'done' });
       break;
+    case 'composing':
+      // Iter 2 is starting: tools are all done, model is now writing the
+      // 60–120-word displayed prose. This is a distinct (and visibly slow)
+      // step; users were left staring at "all done" while it ran.
+      update('composing', { status: 'active' });
+      break;
     case 'final':
-      update('narration', { status: 'done' });
+      update('composing', { status: 'done' });
       break;
   }
 }

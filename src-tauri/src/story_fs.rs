@@ -44,6 +44,19 @@ fn now() -> String {
     format!("{}", t)
 }
 
+/// Defense in depth: a thumbnail.png on disk is the source of truth, regardless
+/// of what meta.json says. Earlier code paths could write the PNG and then
+/// clobber the meta field with a stale in-memory copy, leaving stories with a
+/// real cover that the UI couldn't see.
+fn fill_thumbnail_from_disk(meta: &mut StoryMeta, story_dir: &std::path::Path) {
+    if meta.thumbnail.is_some() {
+        return;
+    }
+    if story_dir.join("thumbnail.png").exists() {
+        meta.thumbnail = Some("thumbnail.png".into());
+    }
+}
+
 pub fn list_stories() -> Result<Vec<StoryMeta>> {
     let root = paths::stories_root();
     fs::create_dir_all(&root)?;
@@ -59,7 +72,8 @@ pub fn list_stories() -> Result<Vec<StoryMeta>> {
             continue;
         }
         if let Ok(bytes) = fs::read(&meta_path) {
-            if let Ok(meta) = serde_json::from_slice::<StoryMeta>(&bytes) {
+            if let Ok(mut meta) = serde_json::from_slice::<StoryMeta>(&bytes) {
+                fill_thumbnail_from_disk(&mut meta, &path);
                 metas.push(meta);
             }
         }
@@ -92,7 +106,9 @@ pub fn create_story(title: String, seed_prompt: String) -> Result<StoryMeta> {
 pub fn load_story(story_id: &str) -> Result<StoryMeta> {
     let dir = paths::story_dir(story_id);
     let bytes = fs::read(dir.join("meta.json"))?;
-    Ok(serde_json::from_slice(&bytes)?)
+    let mut meta: StoryMeta = serde_json::from_slice(&bytes)?;
+    fill_thumbnail_from_disk(&mut meta, &dir);
+    Ok(meta)
 }
 
 pub fn delete_story(story_id: &str) -> Result<()> {
@@ -166,7 +182,10 @@ pub fn append_turn_image(story_id: &str, seq: u32, png_b64: &str) -> Result<Stri
     let filename = format!("{:04}-scene.png", seq);
     fs::write(timeline.join(&filename), bytes)?;
     touch(&dir.join("meta.json"))?;
-    Ok(filename)
+    // Return a story-relative path. Every consumer (resolve_artifact_url,
+    // read_artifact_b64) joins onto story_dir, so the path must include the
+    // "timeline/" subdir or the file won't be found.
+    Ok(format!("timeline/{filename}"))
 }
 
 pub fn append_turn_audio(
@@ -188,7 +207,7 @@ pub fn append_turn_audio(
     let filename = format!("{:04}-scene.{}", seq, ext);
     fs::write(timeline.join(&filename), bytes)?;
     touch(&dir.join("meta.json"))?;
-    Ok(filename)
+    Ok(format!("timeline/{filename}"))
 }
 
 pub fn list_timeline(story_id: &str) -> Result<Vec<TimelineEntry>> {
@@ -226,10 +245,10 @@ pub fn list_timeline(story_id: &str) -> Result<Vec<TimelineEntry>> {
                 slot.markdown = fs::read_to_string(timeline.join(&name)).unwrap_or_default();
             }
             "png" | "jpg" | "jpeg" | "webp" => {
-                slot.image = Some(name.clone());
+                slot.image = Some(format!("timeline/{name}"));
             }
             "mp3" | "wav" | "ogg" => {
-                slot.audio = Some(name.clone());
+                slot.audio = Some(format!("timeline/{name}"));
             }
             _ => {}
         }

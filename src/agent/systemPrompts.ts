@@ -18,6 +18,6 @@ export function buildSystemPrompt(): string {
   return toolDefinitions.system_prompt.replace('{tool_list}', tools.join('\n'));
 }
 
-export const STORY_OPENING_INSTRUCTION = `Begin a brand-new story based on the user's prompt. Set the scene with rich detail, introduce at least one character, call generate_image for a cover illustration, call text_to_speech to narrate the opening, then upsert_character and update_story_summary so the world persists. End your turn with an invitation for the player to make their first choice.`;
+export const STORY_OPENING_INSTRUCTION = `Open a new story from the seed. Each tool exactly once: generate_image, text_to_speech, update_story_summary, upsert_character.`;
 
-export const TURN_CONTINUATION_INSTRUCTION = `Advance the story in response to the player's choice. Honor their agency, narrate vividly, illustrate the new beat (edit_image if appropriate, otherwise generate_image), speak the narration aloud (text_to_speech), and keep the synopsis and character sheets fresh. End your turn with an opening for the player's next move.`;
+export const TURN_CONTINUATION_INSTRUCTION = `Advance from the player's choice. Each tool at most once: edit_image (or generate_image on a setting change), text_to_speech, update_story_summary, upsert_character (if anyone changed).`;

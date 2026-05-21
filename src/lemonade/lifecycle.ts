@@ -9,6 +9,9 @@ import {
   LifecycleState,
   ProgressDetails,
 } from './types';
+import { makeLogger } from '../util/logger';
+
+const log = makeLogger('lifecycle');
 
 const DEFAULT_BASE = 'http://127.0.0.1:13305';
 
@@ -63,6 +66,7 @@ class LifecycleController {
   }
 
   setStage(stage: LifecycleStage, message?: string): void {
+    log.info('stage ->', stage, message ?? '');
     this.update({ stage, message, progress: undefined, progressDetails: undefined });
   }
 
@@ -72,7 +76,7 @@ class LifecycleController {
     // listeners see the new probing→ready trajectory cleanly.
     this.state = { stage: 'probing' };
     this.starting = this.run().catch((e) => {
-      console.error('[lifecycle] failed:', e);
+      log.error('failed:', e);
       this.update({ stage: 'error', error: String(e?.message ?? e) });
     });
     return this.starting;
@@ -129,6 +133,7 @@ class LifecycleController {
     const required = Object.values(REQUIRED_MODELS);
     const installed = await this.fetchInstalledModels();
     const missing = required.filter((id) => !installed.has(id));
+    log.info('required models:', required, 'missing:', missing);
     for (const id of missing) {
       this.update({
         stage: 'pulling_model',
@@ -156,7 +161,7 @@ class LifecycleController {
       }
       return ids;
     } catch (e) {
-      console.warn('[lifecycle] could not list models, using loaded-model fallback:', e);
+      log.warn('could not list models, using loaded-model fallback:', e);
       return ids;
     }
   }
@@ -170,7 +175,7 @@ class LifecycleController {
       }
       return ids;
     } catch (e) {
-      console.warn('[lifecycle] could not read loaded models:', e);
+      log.warn('could not read loaded models:', e);
       return new Set();
     }
   }

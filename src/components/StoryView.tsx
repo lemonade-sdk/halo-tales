@@ -1,9 +1,52 @@
 import React, { useEffect, useState } from 'react';
 import { advanceStory } from '../story/repository';
+import { AgentActivity } from '../agent/agentLoop';
 import { useCurrentStory } from '../hooks/useCurrentStory';
-import { Timeline } from './Timeline';
+import { Timeline, InflightRound } from './Timeline';
+import { GenerationStep } from './GeneratingScreen';
 import { TurnInput } from './TurnInput';
 import { WikiPanel } from './WikiPanel';
+
+function initialContinuationSteps(): GenerationStep[] {
+  return [
+    { id: 'planning', label: 'Planning the response', status: 'active' },
+    { id: 'image', label: 'Painting the scene', status: 'pending' },
+    { id: 'audio', label: 'Recording narration', status: 'pending' },
+    { id: 'composing', label: 'Writing the displayed prose', status: 'pending' },
+    { id: 'save', label: 'Saving the turn', status: 'pending' },
+  ];
+}
+
+function applyAgentActivity(steps: GenerationStep[], event: AgentActivity): GenerationStep[] {
+  const update = (id: string, patch: Partial<Omit<GenerationStep, 'id'>>): GenerationStep[] =>
+    steps.map((step) => {
+      if (step.id === id) return { ...step, ...patch };
+      if (patch.status === 'active' && step.status === 'active') {
+        return { ...step, status: 'done' };
+      }
+      return step;
+    });
+  switch (event.kind) {
+    case 'thinking':
+      return update('planning', { status: 'active' });
+    case 'tool_call':
+      if (event.name === 'generate_image' || event.name === 'edit_image') {
+        return update('image', { status: 'active' });
+      }
+      if (event.name === 'text_to_speech') {
+        return update('audio', { status: 'active' });
+      }
+      return steps;
+    case 'image_done':
+      return update('image', { status: 'done' });
+    case 'audio_done':
+      return update('audio', { status: 'done' });
+    case 'composing':
+      return update('composing', { status: 'active' });
+    case 'final':
+      return update('composing', { status: 'done' });
+  }
+}
 
 interface Props {
   storyId: string;
@@ -16,6 +59,7 @@ export function StoryView({ storyId, onBack, onError }: Props): React.JSX.Elemen
   const [busy, setBusy] = useState(false);
   const [wikiOpen, setWikiOpen] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const [inflight, setInflight] = useState<InflightRound | null>(null);
 
   useEffect(() => {
     if (story.error) onError(story.error);
@@ -26,9 +70,15 @@ export function StoryView({ storyId, onBack, onError }: Props): React.JSX.Elemen
     if (!story.meta) return;
     setBusy(true);
     setStatusMsg('Storyteller thinking…');
+    setInflight({ userText: text, steps: initialContinuationSteps() });
     try {
       const lastImage = lastImageFilename(story.timeline);
-      const result = await advanceStory(storyId, text, lastImage);
+      const result = await advanceStory(storyId, text, lastImage, {
+        onAgentActivity: (event) =>
+          setInflight((current) =>
+            current ? { ...current, steps: applyAgentActivity(current.steps, event) } : current,
+          ),
+      });
       story.appendEntries([result.user, result.scene], result.scene.seq);
       if (result.output.ended) {
         story.setMeta({
@@ -42,6 +92,7 @@ export function StoryView({ storyId, onBack, onError }: Props): React.JSX.Elemen
     } finally {
       setBusy(false);
       setStatusMsg(null);
+      setInflight(null);
     }
   }
 
@@ -70,7 +121,7 @@ export function StoryView({ storyId, onBack, onError }: Props): React.JSX.Elemen
           <button onClick={() => setWikiOpen(true)}>Wiki</button>
         </div>
 
-        {story.timeline.length === 0 ? (
+        {story.timeline.length === 0 && !inflight ? (
           <div className="center-feedback">No turns yet.</div>
         ) : (
           <Timeline
@@ -78,6 +129,7 @@ export function StoryView({ storyId, onBack, onError }: Props): React.JSX.Elemen
             entries={story.timeline}
             liveSeq={story.liveSeq}
             onEdit={story.refresh}
+            inflight={inflight}
           />
         )}
 
@@ -87,6 +139,7 @@ export function StoryView({ storyId, onBack, onError }: Props): React.JSX.Elemen
       {wikiOpen && (
         <WikiPanel
           storyId={storyId}
+          meta={story.meta}
           timeline={story.timeline}
           onTimelineChange={story.refresh}
           onClose={() => setWikiOpen(false)}

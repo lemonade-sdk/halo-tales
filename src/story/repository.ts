@@ -135,12 +135,18 @@ export async function persistTurn(
   return entry;
 }
 
+export interface AdvanceStoryOptions {
+  signal?: AbortSignal;
+  onAgentActivity?: (event: AgentActivity) => void;
+}
+
 export async function advanceStory(
   storyId: string,
   userText: string,
   lastImageRelative?: string,
-  signal?: AbortSignal,
+  options: AdvanceStoryOptions = {},
 ): Promise<{ user: TimelineEntry; scene: TimelineEntry; output: TurnOutput }> {
+  const { signal, onAgentActivity } = options;
   const user = await persistUserTurn(storyId, userText);
   // Rehydrate the most recent illustration (if any) so the agent's
   // edit_image tool has a source PNG after an app reload.
@@ -152,10 +158,16 @@ export async function advanceStory(
         relative: lastImageRelative,
       });
     } catch (e) {
-      console.warn('[advanceStory] failed to load prior image; edit_image will fall back', e);
+      log.warn('advanceStory: failed to load prior image; edit_image will fall back', e);
     }
   }
-  const output = await runTurn({ storyId, userInput: userText, lastImageB64, signal });
+  const output = await runTurn({
+    storyId,
+    userInput: userText,
+    lastImageB64,
+    signal,
+    onActivity: onAgentActivity,
+  });
   const scene = await persistTurn(storyId, 'scene', output);
   if (output.ended) {
     const meta = await repo.load(storyId);

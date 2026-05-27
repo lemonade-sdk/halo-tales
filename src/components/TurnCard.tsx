@@ -26,11 +26,17 @@ async function dataUrlFor(storyId: string, relative: string): Promise<string> {
 interface Props {
   storyId: string;
   entry: TimelineEntry;
+  /** 1-indexed round number for display (opening = 1, first continuation = 2,
+   *  …). Falls back to entry.seq if not provided. */
+  turnNumber?: number;
+  /** Player's move that triggered this scene, rendered as a prefix above
+   *  the storyteller prose. Undefined for the opening turn. */
+  userPrefix?: string;
   autoPlayAudio?: boolean;
   onEdit?: () => void;
 }
 
-export function TurnCard({ storyId, entry, autoPlayAudio, onEdit }: Props): React.JSX.Element {
+export function TurnCard({ storyId, entry, turnNumber, userPrefix, autoPlayAudio, onEdit }: Props): React.JSX.Element {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -97,8 +103,13 @@ export function TurnCard({ storyId, entry, autoPlayAudio, onEdit }: Props): Reac
       )}
       <div className="body">
         <div className="turn-card-meta">
-          {entry.role === 'user' ? 'You' : 'Storyteller'} · turn {entry.seq}
+          {entry.role === 'user' ? 'You' : 'Storyteller'} · turn {turnNumber ?? entry.seq}
         </div>
+        {userPrefix && (
+          <div className="turn-card-user-prefix">
+            <span className="turn-card-user-label">You:</span> {userPrefix}
+          </div>
+        )}
         <div className="turn-card-prose">
           <EditableMarkdown
             source={entry.markdown}

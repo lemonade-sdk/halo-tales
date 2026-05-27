@@ -400,6 +400,41 @@ textarea:focus, input:focus {
   font-size: 12px;
   color: var(--fg-muted);
 }
+/* Player's move quoted above the storyteller's prose. Italicized + left
+   border so it reads as "your input that triggered this scene". */
+.turn-card-user-prefix {
+  flex: 0 0 auto;
+  font-style: italic;
+  color: var(--fg-dim);
+  font-size: 13px;
+  padding: 8px 10px;
+  background: rgba(255, 184, 107, 0.05);
+  border-left: 3px solid var(--accent-dim);
+  border-radius: 4px;
+}
+.turn-card-user-label {
+  color: var(--accent);
+  font-style: normal;
+  font-weight: 600;
+  margin-right: 4px;
+}
+/* In-flight card while the storyteller is generating the next scene. Same
+   shape as a finished card but the bullets sit where the prose will go. */
+.turn-card-inflight {
+  border-color: var(--accent-dim);
+  background: linear-gradient(180deg, rgba(255, 184, 107, 0.04), var(--bg-card) 40%);
+}
+.turn-card-inflight .generation-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
 /* Prose gets the leftover vertical space and scrolls — image and audio stay
    visible. min-height: 0 is required so the flex item can shrink below its
    intrinsic content height. */
@@ -480,6 +515,15 @@ textarea:focus, input:focus {
 .wiki-section h3 { margin: 0 0 8px 0; font-size: 14px; color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.05em; }
 .wiki-section textarea { min-height: 140px; background: rgba(0,0,0,0.2); }
 .wiki-section .markdown:hover { background: rgba(255,255,255,0.03); border-radius: 6px; cursor: text; }
+.wiki-prompt {
+  white-space: pre-wrap;
+  font-style: italic;
+  color: var(--fg);
+  background: rgba(0,0,0,0.2);
+  padding: 12px 14px;
+  border-radius: 6px;
+  border-left: 3px solid var(--accent-dim);
+}
 .trait-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px 0; }
 .trait-chip {
   display: inline-flex; gap: 6px;
@@ -534,9 +578,6 @@ textarea:focus, input:focus {
   border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.9s linear infinite;
-}
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 
 .toast {

@@ -69,9 +69,9 @@ export async function editImage(
   return { b64, mime: 'image/png' };
 }
 
-export async function textToSpeech(
+async function ttsOnce(
   input: string,
-  voice: string = 'af_heart',
+  voice: string,
   signal?: AbortSignal,
 ): Promise<AudioResult> {
   const resp = await serverFetch('/api/v1/audio/speech', {
@@ -90,6 +90,23 @@ export async function textToSpeech(
   }
   const buf = await resp.arrayBuffer();
   return { b64: bytesToB64(new Uint8Array(buf)), mime: 'audio/mpeg' };
+}
+
+/** kokoro occasionally returns 200 OK with an empty body — single retry
+ *  recovers reliably in our experience; persistent empty result is a real
+ *  backend failure and should propagate. */
+export async function textToSpeech(
+  input: string,
+  voice: string = 'af_heart',
+  signal?: AbortSignal,
+): Promise<AudioResult> {
+  const first = await ttsOnce(input, voice, signal);
+  if (first.b64.length > 0) return first;
+  const second = await ttsOnce(input, voice, signal);
+  if (second.b64.length === 0) {
+    throw new Error('text_to_speech returned an empty body twice in a row');
+  }
+  return second;
 }
 
 export async function transcribeAudio(

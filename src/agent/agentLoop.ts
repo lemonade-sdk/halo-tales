@@ -170,7 +170,13 @@ async function postChatCompletion(
 /** If TTS audio was generated with text different from the displayed prose
  *  (common on continuation turns where iter 1 calls tts with placeholder text
  *  and iter 2 produces the actual prose), re-narrate so what the player hears
- *  matches what they read. */
+ *  matches what they read. Whitespace-only differences are ignored — the
+ *  model often emits the TTS input and the assistant content with slight
+ *  trailing-whitespace differences that don't change what a listener hears. */
+function normalizeForCompare(s: string): string {
+  return s.replace(/\s+/g, ' ').trim();
+}
+
 async function ensureAudioMatchesNarration(
   ctx: TurnCtx,
   signal?: AbortSignal,
@@ -179,7 +185,7 @@ async function ensureAudioMatchesNarration(
   const narration = ctx.output.narration.trim();
   const source = (ctx.audioSourceText ?? '').trim();
   if (!narration) return;
-  if (source === narration) return;
+  if (normalizeForCompare(source) === normalizeForCompare(narration)) return;
   log.warn(
     'audio desync — re-generating TTS. sourceChars =',
     source.length,
@@ -264,12 +270,21 @@ async function dispatchTool(
         'prefix =',
         JSON.stringify(input.slice(0, 80)),
       );
-      const audio = await textToSpeech(input, args.voice ?? 'af_heart', signal);
-      ctx.output.audioB64 = audio.b64;
-      ctx.output.audioMime = audio.mime;
-      log.info('text_to_speech OK — b64 chars =', audio.b64.length);
-      ctx.onActivity?.({ kind: 'audio_done' });
-      return 'Narration audio rendered.';
+      try {
+        const audio = await textToSpeech(input, args.voice ?? 'af_heart', signal);
+        ctx.output.audioB64 = audio.b64;
+        ctx.output.audioMime = audio.mime;
+        log.info('text_to_speech OK — b64 chars =', audio.b64.length);
+        ctx.onActivity?.({ kind: 'audio_done' });
+        return 'Narration audio rendered.';
+      } catch (e: unknown) {
+        // Persistent kokoro failure shouldn't block the turn from completing.
+        // Log it, leave audio unset, and return a success-shaped string so
+        // the agent loop counts text_to_speech as attempted and exits.
+        const errMsg = e instanceof Error ? e.message : String(e);
+        log.error('text_to_speech failed; turn will save without audio:', errMsg);
+        return 'Narration audio could not be rendered; the turn will save without it.';
+      }
     }
   }
 
@@ -448,6 +463,18 @@ export async function runTurn(input: RunTurnInput): Promise<TurnOutput> {
         content: result,
         name: call.function.name,
       });
+    }
+
+    // If the model called text_to_speech but left msg.content empty, the
+    // prose it intended to display is sitting in the tts tool's `input` arg.
+    // Harvest it so we can use the same text as the displayed prose,
+    // avoiding both a redundant iter 2 chat call and the audio re-narration.
+    if (!output.narration.trim() && ctx.audioSourceText && ctx.audioSourceText.trim()) {
+      log.info(
+        'runTurn: harvesting TTS input as displayed prose — chars =',
+        ctx.audioSourceText.length,
+      );
+      output.narration = ctx.audioSourceText.trim();
     }
 
     // If this iteration produced both displayed prose AND every required

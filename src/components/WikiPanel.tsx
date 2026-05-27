@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { CharacterEntry, TimelineEntry } from '../story/types';
+import { CharacterEntry, StoryMeta, TimelineEntry } from '../story/types';
 import { repo } from '../story/repository';
 import { storyApi } from '../agent/storyTools';
 import { parseFrontmatter } from '../story/markdown';
@@ -7,6 +7,7 @@ import { EditableMarkdown } from './MarkdownView';
 
 interface Props {
   storyId: string;
+  meta: StoryMeta;
   timeline: TimelineEntry[];
   onTimelineChange: () => void;
   onClose: () => void;
@@ -14,7 +15,7 @@ interface Props {
 
 type Tab = 'synopsis' | 'characters' | 'timeline';
 
-export function WikiPanel({ storyId, timeline, onTimelineChange, onClose }: Props): React.JSX.Element {
+export function WikiPanel({ storyId, meta, timeline, onTimelineChange, onClose }: Props): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('synopsis');
   const [synopsis, setSynopsis] = useState('');
   const [characters, setCharacters] = useState<CharacterEntry[]>([]);
@@ -162,6 +163,10 @@ export function WikiPanel({ storyId, timeline, onTimelineChange, onClose }: Prop
           )}
           {tab === 'timeline' && (
             <>
+              <div className="wiki-section">
+                <h3>Prompt</h3>
+                <div className="wiki-prompt">{meta.seed_prompt}</div>
+              </div>
               {timeline.map((t) => (
                 <div key={t.seq} className="wiki-section">
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

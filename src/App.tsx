@@ -12,6 +12,37 @@ import { AgentActivity } from './agent/agentLoop';
 
 const appWindow = getCurrentWindow();
 
+type ResizeDir =
+  | 'North'
+  | 'NorthEast'
+  | 'East'
+  | 'SouthEast'
+  | 'South'
+  | 'SouthWest'
+  | 'West'
+  | 'NorthWest';
+
+function ResizeHandles(): React.JSX.Element {
+  const start = (dir: ResizeDir) => (e: React.MouseEvent) => {
+    // Only the primary mouse button should initiate resize, otherwise
+    // right-clicks on the edge get swallowed.
+    if (e.button !== 0) return;
+    void appWindow.startResizeDragging(dir);
+  };
+  return (
+    <>
+      <div className="resize-edge resize-n" onMouseDown={start('North')} />
+      <div className="resize-edge resize-s" onMouseDown={start('South')} />
+      <div className="resize-edge resize-e" onMouseDown={start('East')} />
+      <div className="resize-edge resize-w" onMouseDown={start('West')} />
+      <div className="resize-edge resize-ne" onMouseDown={start('NorthEast')} />
+      <div className="resize-edge resize-nw" onMouseDown={start('NorthWest')} />
+      <div className="resize-edge resize-se" onMouseDown={start('SouthEast')} />
+      <div className="resize-edge resize-sw" onMouseDown={start('SouthWest')} />
+    </>
+  );
+}
+
 type Screen =
   | { name: 'start' }
   | { name: 'generating'; prompt: string }
@@ -96,6 +127,7 @@ export function App(): React.JSX.Element {
 
   return (
     <div className="app">
+      <ResizeHandles />
       <header className="app-header" data-tauri-drag-region>
         <h1 data-tauri-drag-region>HaloTales</h1>
         <span
@@ -119,7 +151,7 @@ export function App(): React.JSX.Element {
             aria-label="Minimize"
             onClick={() => void appWindow.minimize()}
           >
-            <svg width="10" height="10" viewBox="0 0 10 10"><rect x="0" y="4" width="10" height="2" /></svg>
+            <svg width="10" height="10" viewBox="0 0 10 10"><rect x="0" y="4" width="10" height="2" fill="currentColor" /></svg>
           </button>
           <button
             className="window-control"

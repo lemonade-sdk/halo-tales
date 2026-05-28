@@ -32,7 +32,9 @@ export function useCurrentStory(storyId: string): CurrentStory {
       const [m, t] = await Promise.all([repo.load(storyId), repo.listTimeline(storyId)]);
       setMeta(m);
       setTimeline(t);
-      setLiveSeq(t.length ? Math.max(...t.map((e) => e.seq)) : undefined);
+      // Intentionally leave liveSeq untouched on refresh. liveSeq drives
+      // audio auto-play, which we only want immediately after a fresh turn
+      // (set by appendEntries), not when the user re-opens a story.
     } catch (e) {
       setError(String(e));
     } finally {

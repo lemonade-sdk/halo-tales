@@ -131,6 +131,24 @@ textarea:focus, input:focus {
 }
 .window-control svg { display: block; }
 
+/* Resize handles around the window edges. Tauri's decorations are disabled
+   so the OS gives us neither resize cursors nor resize behavior — we drive
+   both via startResizeDragging. The corners overlap the edges so the
+   diagonal cursor shows in the right place. */
+.resize-edge {
+  position: fixed;
+  z-index: 1000;
+  background: transparent;
+}
+.resize-n  { top: 0;     left: 6px;  right: 6px;  height: 4px; cursor: n-resize; }
+.resize-s  { bottom: 0;  left: 6px;  right: 6px;  height: 4px; cursor: s-resize; }
+.resize-e  { right: 0;   top: 6px;   bottom: 6px; width: 4px;  cursor: e-resize; }
+.resize-w  { left: 0;    top: 6px;   bottom: 6px; width: 4px;  cursor: w-resize; }
+.resize-ne { top: 0;     right: 0;   width: 8px;  height: 8px; cursor: ne-resize; }
+.resize-nw { top: 0;     left: 0;    width: 8px;  height: 8px; cursor: nw-resize; }
+.resize-se { bottom: 0;  right: 0;   width: 8px;  height: 8px; cursor: se-resize; }
+.resize-sw { bottom: 0;  left: 0;    width: 8px;  height: 8px; cursor: sw-resize; }
+
 /* Setup screen */
 .setup {
   display: flex;

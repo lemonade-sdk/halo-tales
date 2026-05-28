@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { CharacterEntry, StoryMeta, TimelineEntry } from '../story/types';
 import { repo } from '../story/repository';
 import { storyApi } from '../agent/storyTools';
-import { parseFrontmatter } from '../story/markdown';
+import { parseFrontmatter, serializeFrontmatter } from '../story/markdown';
 import { EditableMarkdown } from './MarkdownView';
 
 interface Props {
@@ -15,13 +15,12 @@ interface Props {
 
 type Tab = 'synopsis' | 'characters' | 'timeline';
 
-/** Player character ("You") sorts first; everyone else alphabetically. */
 function sortCharacters(list: CharacterEntry[]): CharacterEntry[] {
-  return [...list].sort((a, b) => {
-    if (a.name === 'You') return -1;
-    if (b.name === 'You') return 1;
-    return a.name.localeCompare(b.name);
-  });
+  // Sort by the human-readable name (frontmatter `name`) if present,
+  // otherwise the filename stem.
+  const displayName = (entry: CharacterEntry): string =>
+    parseFrontmatter(entry.content).traits.name?.trim() || entry.name;
+  return [...list].sort((a, b) => displayName(a).localeCompare(displayName(b)));
 }
 
 export function WikiPanel({ storyId, meta, timeline, onTimelineChange, onClose }: Props): React.JSX.Element {
@@ -138,17 +137,25 @@ export function WikiPanel({ storyId, meta, timeline, onTimelineChange, onClose }
               </div>
               {characters.map((c) => {
                 const fm = parseFrontmatter(c.content);
+                // `traits.name` is the human-readable display name (e.g.
+                // "Kenji Sato"); `c.name` is the sanitized filename stem
+                // ("KenjiSato"). Hide `name` from the pill row since it's
+                // shown as the title.
+                const displayName = fm.traits.name?.trim() || c.name;
+                const pillTraits = Object.entries(fm.traits).filter(
+                  ([k]) => k !== 'name',
+                );
                 return (
                   <div key={c.name} className="wiki-section">
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <h3 style={{ flex: 1 }}>{c.name}</h3>
+                      <h3 style={{ flex: 1 }}>{displayName}</h3>
                       <button className="ghost" onClick={() => removeCharacter(c.name)}>
                         Delete
                       </button>
                     </div>
-                    {Object.keys(fm.traits).length > 0 && (
+                    {pillTraits.length > 0 && (
                       <div className="trait-row">
-                        {Object.entries(fm.traits).map(([k, v]) => (
+                        {pillTraits.map(([k, v]) => (
                           <span key={k} className="trait-chip">
                             <span className="trait-key">{k}</span>
                             <span className="trait-val">{v}</span>
@@ -157,8 +164,13 @@ export function WikiPanel({ storyId, meta, timeline, onTimelineChange, onClose }
                       </div>
                     )}
                     <EditableMarkdown
-                      source={c.content}
-                      onSave={(next) => saveCharacter(c.name, next)}
+                      source={fm.body}
+                      onSave={(nextBody) =>
+                        saveCharacter(
+                          c.name,
+                          serializeFrontmatter({ traits: fm.traits, body: nextBody }),
+                        )
+                      }
                       placeholder="(empty bio — click to edit)"
                       rows={10}
                     />

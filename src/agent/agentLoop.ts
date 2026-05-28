@@ -4,6 +4,7 @@ import toolDefinitions from './toolDefinitions.json';
 import { editImage, generateImage, textToSpeech } from './omniRouterTools';
 import { storyApi } from './storyTools';
 import { buildSystemPrompt, STORY_OPENING_INSTRUCTION, TURN_CONTINUATION_INSTRUCTION } from './systemPrompts';
+import { serializeFrontmatter } from '../story/markdown';
 import { makeLogger } from '../util/logger';
 
 const log = makeLogger('agent');
@@ -306,9 +307,40 @@ async function dispatchTool(
     }
     case 'read_character':
       return await storyApi.readCharacter(ctx.storyId, args.name ?? '');
-    case 'upsert_character':
-      await storyApi.upsertCharacter(ctx.storyId, args.name ?? '', args.content ?? '');
-      return `Character ${args.name} saved.`;
+    case 'upsert_character': {
+      // The structured `traits` + `bio` parameters from the tool schema get
+      // serialized into our on-disk markdown format here. The model can't
+      // mis-format the file — we control the bytes that hit storage.
+      const charName = (typeof args.name === 'string' ? args.name : '').trim();
+      if (!charName) {
+        log.warn('upsert_character called with empty name; skipping');
+        return 'No-op: upsert_character requires a non-empty `name`.';
+      }
+      const traits =
+        args.traits && typeof args.traits === 'object' && !Array.isArray(args.traits)
+          ? (args.traits as Record<string, unknown>)
+          : {};
+      const stringTraits: Record<string, string> = {};
+      for (const [k, v] of Object.entries(traits)) {
+        if (typeof v === 'string') stringTraits[k] = v;
+        else if (v != null) stringTraits[k] = String(v);
+      }
+      // Store the human-readable display name in the frontmatter — the
+      // filename gets sanitized to ASCII alphanumerics for path safety, so
+      // we'd otherwise lose spaces and punctuation ("Kenji Sato" → "KenjiSato").
+      stringTraits.name = charName;
+      const bio = typeof args.bio === 'string' ? args.bio.trim() : '';
+      // Legacy fallback: older tool calls (or model variants) may still send a
+      // single `content` blob — preserve it as-is so we don't lose data.
+      const content =
+        bio || Object.keys(stringTraits).length
+          ? serializeFrontmatter({ traits: stringTraits, body: bio })
+          : typeof args.content === 'string'
+            ? args.content
+            : '';
+      await storyApi.upsertCharacter(ctx.storyId, charName, content);
+      return `Character ${charName} saved.`;
+    }
     case 'end_story': {
       const outcome = normalizeOutcome(args.outcome);
       ctx.output.ended = true;

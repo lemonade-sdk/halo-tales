@@ -1,4 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { makeLogger } from '../util/logger';
+
+const log = makeLogger('audio');
 
 interface Props {
   src: string;
@@ -47,9 +50,17 @@ export function AudioPlayer({
 
   function toggle(): void {
     const el = audioRef.current;
+    log.info('toggle clicked', {
+      elPresent: !!el,
+      paused: el?.paused,
+      readyState: el?.readyState,
+      currentSrc: el?.currentSrc?.slice(0, 64),
+    });
     if (!el) return;
     if (el.paused) {
-      void el.play().catch(() => {});
+      el.play()
+        .then(() => log.info('play resolved'))
+        .catch((e) => log.error('play rejected', String(e)));
     } else {
       el.pause();
     }
@@ -89,19 +100,21 @@ export function AudioPlayer({
         )}
       </button>
       <span className="audio-player-time">{formatTime(currentTime)}</span>
-      <input
-        type="range"
-        className="audio-player-scrub"
-        min={0}
-        max={duration || 0}
-        step={0.01}
-        value={currentTime}
-        onChange={onScrubChange}
-        onMouseUp={onScrubCommit as unknown as React.MouseEventHandler<HTMLInputElement>}
-        onTouchEnd={onScrubCommit as unknown as React.TouchEventHandler<HTMLInputElement>}
-        onKeyUp={onScrubCommit as unknown as React.KeyboardEventHandler<HTMLInputElement>}
-        style={{ ['--progress' as string]: `${pct}%` }}
-      />
+      <div className="audio-player-scrub-wrap">
+        <div className="audio-player-scrub-fill" style={{ width: `${pct}%` }} />
+        <input
+          type="range"
+          className="audio-player-scrub"
+          min={0}
+          max={duration || 0}
+          step={0.01}
+          value={currentTime}
+          onChange={onScrubChange}
+          onMouseUp={onScrubCommit as unknown as React.MouseEventHandler<HTMLInputElement>}
+          onTouchEnd={onScrubCommit as unknown as React.TouchEventHandler<HTMLInputElement>}
+          onKeyUp={onScrubCommit as unknown as React.KeyboardEventHandler<HTMLInputElement>}
+        />
+      </div>
       <span className="audio-player-time">{formatTime(duration)}</span>
       <audio
         ref={audioRef}

@@ -101,14 +101,22 @@
       "type": "function",
       "function": {
         "name": "upsert_character",
-        "description": "Create or overwrite a character sheet. Use frontmatter for traits (role, age, allegiance) and markdown for the bio.",
+        "description": "Create or overwrite a character sheet. Provide structured traits (role, allegiance, age, …) and a free-form prose bio. The app handles the on-disk formatting — do not include frontmatter or key:value lines in the bio.",
         "parameters": {
           "type": "object",
           "properties": {
-            "name": { "type": "string", "description": "Character name (slug)." },
-            "content": { "type": "string", "description": "Full character sheet (markdown)." }
+            "name": { "type": "string", "description": "Character name as they appear in the story (e.g. \"Kenji Sato\")." },
+            "traits": {
+              "type": "object",
+              "description": "Short labelled facts about the character. Common keys: role, allegiance, age. Values are plain strings. Omit if there are no traits.",
+              "additionalProperties": { "type": "string" }
+            },
+            "bio": {
+              "type": "string",
+              "description": "Prose biography in plain English. No headings, no key:value lines, no frontmatter — just the bio itself. The character's name will be shown above; don't repeat it as a heading."
+            }
           },
-          "required": ["name", "content"]
+          "required": ["name", "bio"]
         }
       }
     },

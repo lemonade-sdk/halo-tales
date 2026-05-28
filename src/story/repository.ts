@@ -59,21 +59,6 @@ export async function createNewStory(
     seedPrompt,
   });
   log.info('createNewStory: story_created id =', meta.id);
-  // Seed the player character so the wiki always has a "You" entry. The
-  // storyteller can edit or expand this as the story develops via
-  // upsert_character.
-  await invoke<string>('upsert_character', {
-    storyId: meta.id,
-    name: 'You',
-    content: `---
-role: player
----
-
-The protagonist of this story — the player.
-
-**Seed:** ${seedPrompt}
-`,
-  });
   onActivity?.({ kind: 'story_created' });
   onActivity?.({ kind: 'title_start' });
   log.info('createNewStory: naming story...');

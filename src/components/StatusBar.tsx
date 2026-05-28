@@ -6,8 +6,8 @@ interface Props {
 }
 
 const SOURCE_LABEL: Record<string, string> = {
-  system: 'Connected to system Lemonade',
-  embedded: 'Running embedded Lemonade',
+  system: 'System Lemonade',
+  embedded: 'Embedded Lemonade',
 };
 
 export function StatusBar({ state }: Props): React.JSX.Element {
@@ -30,6 +30,14 @@ export function StatusBar({ state }: Props): React.JSX.Element {
     <footer className="status-bar">
       <span className={dotClass} />
       <span className="status-bar-label">{label}</span>
+      {state.omniModel && (
+        <span
+          className="status-bar-model"
+          title={`Omni model in use${state.vramGB ? ` · detected ${state.vramGB.toFixed(0)} GB GPU VRAM` : ''}`}
+        >
+          {state.omniModel}
+        </span>
+      )}
       {url && (
         <span className="status-bar-url" title="Lemonade base URL">
           {url}

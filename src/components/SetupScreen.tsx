@@ -1,6 +1,6 @@
 import React from 'react';
 import { LifecycleStage, LifecycleState } from '../lemonade/types';
-import { MODEL_DISPLAY, REQUIRED_MODELS, ModelRole } from '../lemonade/models';
+import { OMNI_MODEL_DISPLAY } from '../lemonade/models';
 
 interface Props {
   state: LifecycleState;
@@ -14,8 +14,12 @@ interface Step {
   done: (state: LifecycleState) => boolean;
 }
 
-function buildSteps(): Step[] {
-  const roleList = Object.keys(REQUIRED_MODELS) as ModelRole[];
+function buildSteps(state: LifecycleState): Step[] {
+  const tier = state.omniTier;
+  const display = tier ? OMNI_MODEL_DISPLAY[tier] : null;
+  const modelLabel = display
+    ? `Loading ${display.name}`
+    : 'Loading omni model';
   return [
     {
       id: 'probe',
@@ -31,28 +35,17 @@ function buildSteps(): Step[] {
     },
     {
       id: 'check-models',
-      label: 'Checking required models',
+      label: 'Choosing the right omni model',
       stages: ['checking_models'],
       done: (s) => stageIndex(s.stage) > stageIndex('checking_models'),
     },
-    ...roleList.map((role) => ({
-      id: `model-${role}`,
-      label: `${MODEL_DISPLAY[role].name}`,
-      stages: ['pulling_model'] as LifecycleStage[],
-      done: (s: LifecycleState) =>
-        s.stage === 'ready' ||
-        (s.stage === 'pulling_model' && s.pulling !== REQUIRED_MODELS[role] && rolePassed(role, s)),
-    })),
+    {
+      id: 'pull-model',
+      label: modelLabel,
+      stages: ['pulling_model'],
+      done: (s) => s.stage === 'ready',
+    },
   ];
-}
-
-function rolePassed(role: ModelRole, s: LifecycleState): boolean {
-  const order: ModelRole[] = ['chat', 'image', 'tts', 'stt'];
-  const myIdx = order.indexOf(role);
-  if (!s.pulling) return true;
-  const pulling = (Object.entries(REQUIRED_MODELS).find(([, id]) => id === s.pulling)?.[0]) as ModelRole | undefined;
-  if (!pulling) return false;
-  return order.indexOf(pulling) > myIdx;
 }
 
 function stageIndex(stage: LifecycleStage): number {
@@ -68,14 +61,14 @@ function stageIndex(stage: LifecycleStage): number {
 }
 
 export function SetupScreen({ state, onRetry }: Props): React.JSX.Element {
-  const steps = buildSteps();
+  const steps = buildSteps(state);
   const activeStepIdx = steps.findIndex((s) => !s.done(state));
   return (
     <div className="setup">
       <div className="setup-card">
         <h2>Setting up your storyteller</h2>
         <p>
-          HaloTales runs entirely on your machine via Lemonade's OmniRouter.
+          HaloTales runs entirely on your machine via Lemonade Omni Models.
           The first launch downloads everything needed — give it a few minutes.
         </p>
         <div className="checklist">

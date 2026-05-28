@@ -1,5 +1,5 @@
 import { serverFetch } from './client';
-import { REQUIRED_MODELS } from './models';
+import { getOmniModel } from './models';
 
 const STORYTELLER_CTX_SIZE = 8192;
 
@@ -7,7 +7,7 @@ let storytellerWarmup: Promise<void> | null = null;
 
 export function warmStoryteller(): Promise<void> {
   if (!storytellerWarmup) {
-    storytellerWarmup = loadModel(REQUIRED_MODELS.chat).catch((error) => {
+    storytellerWarmup = loadModel(getOmniModel()).catch((error) => {
       storytellerWarmup = null;
       throw error;
     });

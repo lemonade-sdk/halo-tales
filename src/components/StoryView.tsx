@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { advanceStory } from '../story/repository';
 import { AgentActivity } from '../agent/agentLoop';
 import { useCurrentStory } from '../hooks/useCurrentStory';
@@ -50,20 +50,36 @@ function applyAgentActivity(steps: GenerationStep[], event: AgentActivity): Gene
 
 interface Props {
   storyId: string;
+  /** True when this view was navigated to immediately after a fresh story
+   *  creation. We seed `liveSeq` to the most recent entry so the audio
+   *  auto-plays for that opening turn; on a normal resume we leave it
+   *  undefined so the user has to press play themselves. */
+  autoPlayLatest?: boolean;
   onBack: () => void;
   onError: (msg: string) => void;
 }
 
-export function StoryView({ storyId, onBack, onError }: Props): React.JSX.Element {
+export function StoryView({ storyId, autoPlayLatest, onBack, onError }: Props): React.JSX.Element {
   const story = useCurrentStory(storyId);
   const [busy, setBusy] = useState(false);
   const [wikiOpen, setWikiOpen] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [inflight, setInflight] = useState<InflightRound | null>(null);
+  // Track whether the autoPlayLatest hint has been honored yet so we only
+  // fire it on the first timeline-load for this view.
+  const autoPlaySeeded = useRef(false);
 
   useEffect(() => {
     if (story.error) onError(story.error);
   }, [story.error, onError]);
+
+  useEffect(() => {
+    if (!autoPlayLatest || autoPlaySeeded.current) return;
+    if (story.loading || story.timeline.length === 0) return;
+    const latest = Math.max(...story.timeline.map((e) => e.seq));
+    story.setLiveSeq(latest);
+    autoPlaySeeded.current = true;
+  }, [autoPlayLatest, story.loading, story.timeline, story.setLiveSeq]);
 
 
   async function onSubmit(text: string): Promise<void> {

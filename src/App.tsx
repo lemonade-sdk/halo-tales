@@ -46,7 +46,7 @@ function ResizeHandles(): React.JSX.Element {
 type Screen =
   | { name: 'start' }
   | { name: 'generating'; prompt: string }
-  | { name: 'story'; id: string };
+  | { name: 'story'; id: string; autoPlayLatest?: boolean };
 
 export function App(): React.JSX.Element {
   const { state: lifecycleState, retry } = useLemonadeStatus();
@@ -88,7 +88,7 @@ export function App(): React.JSX.Element {
       const { meta } = await createNewStory(prompt, {
         onActivity: (event) => handleGenerationActivity(event, updateGenerationStep),
       });
-      setScreen({ name: 'story', id: meta.id });
+      setScreen({ name: 'story', id: meta.id, autoPlayLatest: true });
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e);
       setToast(`Failed to start story: ${detail}`);
@@ -119,6 +119,7 @@ export function App(): React.JSX.Element {
     return (
       <StoryView
         storyId={screen.id}
+        autoPlayLatest={screen.autoPlayLatest}
         onBack={() => setScreen({ name: 'start' })}
         onError={setToast}
       />
@@ -134,7 +135,7 @@ export function App(): React.JSX.Element {
           data-tauri-drag-region
           style={{ color: 'var(--fg-muted)', fontSize: 13 }}
         >
-          Local-AI roleplaying · powered by Lemonade OmniRouter
+          Local-AI roleplaying · powered by Lemonade Omni Models
         </span>
         <div className="spacer" data-tauri-drag-region />
         {!ready && (

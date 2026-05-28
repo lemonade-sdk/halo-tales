@@ -31,6 +31,12 @@ export interface LifecycleState {
   /** model id currently being pulled (if any) */
   pulling?: string;
   error?: string;
+  /** Total usable GPU VRAM in GB (from /api/v1/system-info). */
+  vramGB?: number;
+  /** Which omni model tier we chose for this system. */
+  omniTier?: 'large' | 'lite';
+  /** Resolved omni model id (the value of OMNI_MODELS[tier]). */
+  omniModel?: string;
 }
 
 export interface ProgressDetails {

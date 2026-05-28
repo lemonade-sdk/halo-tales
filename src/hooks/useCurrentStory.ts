@@ -10,6 +10,7 @@ export interface CurrentStory {
   error: string | null;
   refresh: () => Promise<void>;
   setMeta: (meta: StoryMeta) => void;
+  setLiveSeq: (seq: number | undefined) => void;
   appendEntries: (entries: TimelineEntry[], liveSeq?: number) => void;
 }
 
@@ -59,6 +60,7 @@ export function useCurrentStory(storyId: string): CurrentStory {
     error,
     refresh,
     setMeta,
+    setLiveSeq,
     appendEntries,
   };
 }

@@ -18,7 +18,7 @@
         "minWidth": 900,
         "minHeight": 600,
         "center": true,
-        "decorations": false
+        "decorations": true
       }
     ],
     "security": {
@@ -42,7 +42,7 @@
     "targets": ["app", "dmg", "deb", "rpm", "appimage", "msi", "nsis"],
     "category": "Entertainment",
     "shortDescription": "Local-AI creative roleplaying",
-    "longDescription": "HaloTales is an interactive, turn-based storytelling experience powered entirely by local AI through Lemonade's OmniRouter — narration, illustration, and voice acting all run on your hardware.",
+    "longDescription": "HaloTales is an interactive, turn-based storytelling experience powered entirely by local AI through Lemonade Omni Models — narration, illustration, and voice acting all run on your hardware.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

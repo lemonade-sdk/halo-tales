@@ -679,6 +679,11 @@ textarea:focus, input:focus {
   font-family: ui-monospace, 'SF Mono', Menlo, monospace;
   font-size: 11px;
 }
+.status-bar-model {
+  color: var(--accent);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
 .status-bar-spacer { flex: 1; }
 .status-bar-version {
   color: var(--fg-muted);

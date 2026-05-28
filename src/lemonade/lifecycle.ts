@@ -1,7 +1,14 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { setEndpoint, jsonFetch } from './client';
-import { REQUIRED_MODELS } from './models';
+import {
+  OMNI_MODELS,
+  OmniModelTier,
+  computeTotalVramGB,
+  getOmniModel,
+  pickTier,
+  setOmniModel,
+} from './models';
 import {
   DownloadProgress,
   LemonadeEndpoint,
@@ -120,7 +127,8 @@ class LifecycleController {
       setEndpoint(endpoint);
       this.update({ endpoint });
 
-      this.setStage('checking_models', 'Checking required models…');
+      this.setStage('checking_models', 'Choosing the right omni model…');
+      await this.pickOmniModelByMemory();
       await this.ensureModels();
 
       this.setStage('ready', 'Ready');
@@ -129,16 +137,42 @@ class LifecycleController {
     }
   }
 
+  /** Probe Lemonade's `/api/v1/system-info` for usable GPU VRAM and pick the
+   *  appropriate omni model tier. Defaults to the lite tier if the response
+   *  is missing or malformed — running a too-small model on a giant box is
+   *  graceful; running a too-large model on a small box is not. */
+  private async pickOmniModelByMemory(): Promise<void> {
+    let tier: OmniModelTier = 'lite';
+    let vramGB = 0;
+    try {
+      const info = await jsonFetchWithTimeout<Record<string, unknown>>(
+        '/api/v1/system-info',
+        8000,
+      );
+      vramGB = computeTotalVramGB(info);
+      tier = pickTier(vramGB);
+    } catch (e) {
+      log.warn('could not read system-info; falling back to lite omni model:', e);
+    }
+    setOmniModel(tier);
+    log.info('omni model tier =', tier, 'model =', OMNI_MODELS[tier], 'vramGB =', vramGB);
+    this.update({
+      omniTier: tier,
+      omniModel: OMNI_MODELS[tier],
+      vramGB: vramGB || undefined,
+    });
+  }
+
   private async ensureModels(): Promise<void> {
-    const required = Object.values(REQUIRED_MODELS);
+    const required = [getOmniModel()];
     const installed = await this.fetchInstalledModels();
     const missing = required.filter((id) => !installed.has(id));
-    log.info('required models:', required, 'missing:', missing);
+    log.info('required omni model:', required[0], 'missing:', missing);
     for (const id of missing) {
       this.update({
         stage: 'pulling_model',
         pulling: id,
-        message: `Downloading model ${id}…`,
+        message: `Downloading omni model ${id}…`,
         progress: undefined,
         progressDetails: undefined,
       });
@@ -239,7 +273,10 @@ function statesEqual(a: LifecycleState, b: LifecycleState): boolean {
     progressDetailsEqual(a.progressDetails, b.progressDetails) &&
     a.pulling === b.pulling &&
     a.error === b.error &&
-    a.endpoint === b.endpoint
+    a.endpoint === b.endpoint &&
+    a.omniTier === b.omniTier &&
+    a.omniModel === b.omniModel &&
+    a.vramGB === b.vramGB
   );
 }
 

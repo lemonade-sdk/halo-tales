@@ -1,5 +1,5 @@
 import { serverFetch } from '../lemonade/client';
-import { REQUIRED_MODELS } from '../lemonade/models';
+import { getOmniComponent } from '../lemonade/models';
 import { b64ToBytes, bytesToB64 } from '../util/base64';
 
 export interface ImageGenResult {
@@ -20,7 +20,7 @@ export async function generateImage(prompt: string, signal?: AbortSignal): Promi
   const resp = await serverFetch('/api/v1/images/generations', {
     method: 'POST',
     body: {
-      model: REQUIRED_MODELS.image,
+      model: getOmniComponent('image'),
       prompt,
       response_format: 'b64_json',
       n: 1,
@@ -44,7 +44,7 @@ export async function editImage(
   signal?: AbortSignal,
 ): Promise<ImageGenResult> {
   const form = new FormData();
-  form.append('model', REQUIRED_MODELS.image);
+  form.append('model', getOmniComponent('image'));
   form.append('prompt', prompt);
   form.append('response_format', 'b64_json');
   form.append('n', '1');
@@ -77,7 +77,7 @@ async function ttsOnce(
   const resp = await serverFetch('/api/v1/audio/speech', {
     method: 'POST',
     body: {
-      model: REQUIRED_MODELS.tts,
+      model: getOmniComponent('tts'),
       input,
       voice,
       response_format: 'mp3',
@@ -118,7 +118,7 @@ export async function transcribeAudio(
   const ext = mime.includes('wav') ? 'wav' : mime.includes('webm') ? 'webm' : 'mp3';
   const form = new FormData();
   form.append('file', new Blob([b64ToBytes(audioB64)], { type: mime }), `input.${ext}`);
-  form.append('model', REQUIRED_MODELS.stt);
+  form.append('model', getOmniComponent('stt'));
   if (language) form.append('language', language);
   const resp = await serverFetch('/api/v1/audio/transcriptions', {
     method: 'POST',

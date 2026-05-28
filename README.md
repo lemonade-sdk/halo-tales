@@ -4,7 +4,7 @@
 
 HaloTales hands you a storyteller that lives entirely on your machine. Describe a setting, a character, or a situation, and the AI weaves an evolving story — narrating beat by beat, illustrating each scene, voice-acting the dialogue, and remembering everything you build together. Then you take a turn, and it adapts.
 
-Every word, image, and audio clip is generated locally by [Lemonade](https://lemonade-server.ai/)'s OmniRouter — no cloud, no telemetry, no rate limits.
+Every word, image, and audio clip is generated locally by [Lemonade Omni Models](https://lemonade-server.ai/) — no cloud, no telemetry, no rate limits. HaloTales automatically picks the right one for your hardware (the larger `LMX-Omni-52B-Halo` on systems with ≥64 GB of GPU VRAM, the lighter `LMX-Omni-5.5B-Lite` on everything else).
 
 ---
 

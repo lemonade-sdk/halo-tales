@@ -1,5 +1,5 @@
 import { serverFetch } from '../lemonade/client';
-import { REQUIRED_MODELS } from '../lemonade/models';
+import { getOmniComponent } from '../lemonade/models';
 import toolDefinitions from './toolDefinitions.json';
 import { editImage, generateImage, textToSpeech } from './omniRouterTools';
 import { storyApi } from './storyTools';
@@ -371,8 +371,8 @@ export async function runTurn(input: RunTurnInput): Promise<TurnOutput> {
     if (toolChoice === 'none') {
       ctx.onActivity?.({ kind: 'composing' });
     }
-    const resp = await postChatCompletion({
-      model: REQUIRED_MODELS.chat,
+    let resp = await postChatCompletion({
+      model: getOmniComponent('chat'),
       messages,
       tools,
       tool_choice: toolChoice,
@@ -383,7 +383,7 @@ export async function runTurn(input: RunTurnInput): Promise<TurnOutput> {
       log.error('runTurn: chat/completions failed', resp.status, text);
       throw new Error(`chat/completions failed: HTTP ${resp.status} ${text}`);
     }
-    const data = (await resp.json()) as ChatCompletionResponse & {
+    let data = (await resp.json()) as ChatCompletionResponse & {
       error?: { message?: string; code?: number };
     };
     if (data.error) {
@@ -391,14 +391,48 @@ export async function runTurn(input: RunTurnInput): Promise<TurnOutput> {
       log.error('runTurn: backend returned error body', msg);
       throw new Error(`Lemonade error: ${msg}`);
     }
-    const choice = data.choices?.[0] as
+    let choice = data.choices?.[0] as
       | { message?: ChatMessage; finish_reason?: string }
       | undefined;
-    const msg = choice?.message;
+    let msg = choice?.message;
     if (!msg) {
       log.error('runTurn: chat/completions returned no message', data);
       throw new Error('chat/completions returned no message');
     }
+
+    // Runaway-thinking recovery: Qwen3 occasionally burns the whole token
+    // budget on reasoning, returning finish_reason=length with empty content
+    // and no tool calls. There's no Lemonade-side knob to cap reasoning
+    // (server.cpp only honors a binary enable_thinking flag at the top
+    // level), so retry once with thinking off — we'll get content, possibly
+    // without tool calls, which is still better than the silent fallback.
+    if (
+      choice?.finish_reason === 'length' &&
+      !(msg.content ?? '').trim() &&
+      !(msg.tool_calls?.length ?? 0)
+    ) {
+      log.warn('runTurn: thinking ran away — retrying with enable_thinking: false');
+      const { chat_template_kwargs: _kw, ...sampling } = STORY_CHAT_OPTIONS;
+      resp = await postChatCompletion(
+        {
+          model: getOmniComponent('chat'),
+          messages,
+          tools,
+          tool_choice: toolChoice,
+          ...sampling,
+          enable_thinking: false,
+        },
+        signal,
+      );
+      if (resp.ok) {
+        data = (await resp.json()) as typeof data;
+        choice = data.choices?.[0] as typeof choice;
+        if (choice?.message) msg = choice.message;
+      } else {
+        log.error('runTurn: thinking-off retry failed', resp.status);
+      }
+    }
+
     const rawContent = msg.content ?? '';
     const reasoning = (msg as { reasoning_content?: string }).reasoning_content ?? '';
     log.info(
@@ -503,7 +537,7 @@ export async function runTurn(input: RunTurnInput): Promise<TurnOutput> {
 export async function nameNewStory(seedPrompt: string, signal?: AbortSignal): Promise<{ title: string; imagePrompt: string }> {
   log.info('nameNewStory: begin');
   const resp = await postChatCompletion({
-    model: REQUIRED_MODELS.chat,
+    model: getOmniComponent('chat'),
     messages: [
       {
         role: 'system',

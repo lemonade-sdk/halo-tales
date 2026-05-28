@@ -34,6 +34,12 @@ thiserror = "1"
 base64 = "0.22"
 libc = "0.2"
 
+[target.'cfg(target_os = "linux")'.dependencies]
+# Needed to grab the underlying WebView from Tauri and answer
+# WebKitGTK's permission-request signal — without that, getUserMedia
+# silently fails with NotAllowedError.
+webkit2gtk = { version = "2.0", features = ["v2_40"] }
+
 [profile.release]
 strip = true
 lto = true

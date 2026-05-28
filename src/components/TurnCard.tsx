@@ -1,8 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { TimelineEntry } from '../story/types';
 import { repo } from '../story/repository';
 import { EditableMarkdown } from './MarkdownView';
+import { AudioPlayer } from './AudioPlayer';
 import { makeLogger } from '../util/logger';
 
 const log = makeLogger('turn');
@@ -39,7 +40,6 @@ interface Props {
 export function TurnCard({ storyId, entry, turnNumber, userPrefix, autoPlayAudio, onEdit }: Props): React.JSX.Element {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,12 +77,6 @@ export function TurnCard({ storyId, entry, turnNumber, userPrefix, autoPlayAudio
     return () => { cancelled = true; };
   }, [storyId, entry.image, entry.audio, entry.seq, entry.role, entry.markdown.length]);
 
-  useEffect(() => {
-    if (autoPlayAudio && audioRef.current && audioUrl) {
-      audioRef.current.play().catch(() => {/* user gesture may be required */});
-    }
-  }, [autoPlayAudio, audioUrl]);
-
   async function save(markdown: string): Promise<void> {
     await repo.writeTimelineEntry(storyId, entry.seq, markdown);
     onEdit?.();
@@ -119,11 +113,9 @@ export function TurnCard({ storyId, entry, turnNumber, userPrefix, autoPlayAudio
           />
         </div>
         {audioUrl && (
-          <audio
-            ref={audioRef}
-            controls
+          <AudioPlayer
             src={audioUrl}
-            preload="auto"
+            autoPlay={autoPlayAudio}
             onError={(e) => {
               const el = e.currentTarget as HTMLAudioElement;
               log.error('audio onError', {

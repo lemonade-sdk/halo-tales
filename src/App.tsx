@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { lifecycle } from './lemonade/lifecycle';
 import { useLemonadeStatus } from './hooks/useLemonadeStatus';
 import { SetupScreen } from './components/SetupScreen';
@@ -8,6 +9,8 @@ import { StoryView } from './components/StoryView';
 import { StatusBar } from './components/StatusBar';
 import { createNewStory, NewStoryActivity } from './story/repository';
 import { AgentActivity } from './agent/agentLoop';
+
+const appWindow = getCurrentWindow();
 
 type Screen =
   | { name: 'start' }
@@ -93,17 +96,49 @@ export function App(): React.JSX.Element {
 
   return (
     <div className="app">
-      <header className="app-header">
-        <h1>HaloTales</h1>
-        <span style={{ color: 'var(--fg-muted)', fontSize: 13 }}>
+      <header className="app-header" data-tauri-drag-region>
+        <h1 data-tauri-drag-region>HaloTales</h1>
+        <span
+          data-tauri-drag-region
+          style={{ color: 'var(--fg-muted)', fontSize: 13 }}
+        >
           Local-AI roleplaying · powered by Lemonade OmniRouter
         </span>
-        <div className="spacer" />
+        <div className="spacer" data-tauri-drag-region />
         {!ready && (
-          <span style={{ color: 'var(--fg-muted)', fontSize: 13 }}>
+          <span
+            data-tauri-drag-region
+            style={{ color: 'var(--fg-muted)', fontSize: 13 }}
+          >
             {lifecycleState.message ?? 'Starting Lemonade…'}
           </span>
         )}
+        <div className="window-controls">
+          <button
+            className="window-control"
+            aria-label="Minimize"
+            onClick={() => void appWindow.minimize()}
+          >
+            <svg width="10" height="10" viewBox="0 0 10 10"><rect x="0" y="4" width="10" height="2" /></svg>
+          </button>
+          <button
+            className="window-control"
+            aria-label="Maximize"
+            onClick={() => void appWindow.toggleMaximize()}
+          >
+            <svg width="10" height="10" viewBox="0 0 10 10"><rect x="0" y="0" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
+          </button>
+          <button
+            className="window-control window-control-close"
+            aria-label="Close"
+            onClick={() => void appWindow.close()}
+          >
+            <svg width="10" height="10" viewBox="0 0 10 10">
+              <line x1="0" y1="0" x2="10" y2="10" stroke="currentColor" strokeWidth="1.5" />
+              <line x1="10" y1="0" x2="0" y2="10" stroke="currentColor" strokeWidth="1.5" />
+            </svg>
+          </button>
+        </div>
       </header>
 
       <div className="app-body">{renderBody()}</div>

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { transcribeAudio } from '../agent/omniRouterTools';
 import { blobToB64 } from '../util/base64';
 
@@ -11,8 +11,18 @@ export function TurnInput({ disabled, onSubmit }: Props): React.JSX.Element {
   const [value, setValue] = useState('');
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
+
+  // Auto-resize the textarea so it starts at 1 row and grows with content,
+  // capped by CSS max-height (which will then show a scrollbar).
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
 
   async function startRecording(): Promise<void> {
     try {
@@ -67,33 +77,33 @@ export function TurnInput({ disabled, onSubmit }: Props): React.JSX.Element {
   return (
     <div className="turn-input">
       <textarea
+        ref={textareaRef}
+        rows={1}
         value={value}
         placeholder={disabled ? 'The storyteller is writing…' : 'Your move…'}
         disabled={disabled || transcribing}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {
-          if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+          if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             submit();
           }
         }}
       />
-      <div className="actions">
-        <button
-          className="primary"
-          disabled={disabled || transcribing || !value.trim()}
-          onClick={submit}
-        >
-          Take your turn
-        </button>
-        <button
-          className={recording ? 'recording' : 'ghost'}
-          disabled={disabled || transcribing}
-          onClick={recording ? stopRecording : startRecording}
-        >
-          {recording ? 'Stop ●' : transcribing ? 'Transcribing…' : 'Speak'}
-        </button>
-      </div>
+      <button
+        className="primary"
+        disabled={disabled || transcribing || !value.trim()}
+        onClick={submit}
+      >
+        Take your turn
+      </button>
+      <button
+        className={recording ? 'recording' : 'ghost'}
+        disabled={disabled || transcribing}
+        onClick={recording ? stopRecording : startRecording}
+      >
+        {recording ? 'Stop ●' : transcribing ? 'Transcribing…' : 'Speak'}
+      </button>
     </div>
   );
 }

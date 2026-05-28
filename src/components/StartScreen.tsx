@@ -111,7 +111,7 @@ export function StartScreen({ onOpen, onBegin, onError }: Props): React.JSX.Elem
           placeholder={DEFAULT_SEED}
           onChange={(e) => setSeed(e.target.value)}
           onKeyDown={(e) => {
-            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+            if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
               onCreate();
             }

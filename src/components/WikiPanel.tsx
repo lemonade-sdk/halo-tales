@@ -15,6 +15,15 @@ interface Props {
 
 type Tab = 'synopsis' | 'characters' | 'timeline';
 
+/** Player character ("You") sorts first; everyone else alphabetically. */
+function sortCharacters(list: CharacterEntry[]): CharacterEntry[] {
+  return [...list].sort((a, b) => {
+    if (a.name === 'You') return -1;
+    if (b.name === 'You') return 1;
+    return a.name.localeCompare(b.name);
+  });
+}
+
 export function WikiPanel({ storyId, meta, timeline, onTimelineChange, onClose }: Props): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('synopsis');
   const [synopsis, setSynopsis] = useState('');
@@ -33,7 +42,7 @@ export function WikiPanel({ storyId, meta, timeline, onTimelineChange, onClose }
       storyApi.listCharacters(storyId),
     ]);
     setSynopsis(s);
-    setCharacters(c);
+    setCharacters(sortCharacters(c));
   }
 
   async function saveSynopsis(next: string): Promise<void> {
@@ -58,7 +67,7 @@ export function WikiPanel({ storyId, meta, timeline, onTimelineChange, onClose }
     await storyApi.upsertCharacter(storyId, name, `# ${name}\n\n`);
     setNewCharName('');
     const updated = await storyApi.listCharacters(storyId);
-    setCharacters(updated);
+    setCharacters(sortCharacters(updated));
   }
 
   async function saveTimeline(seq: number, markdown: string): Promise<void> {

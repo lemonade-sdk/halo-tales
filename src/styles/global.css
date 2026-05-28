@@ -82,11 +82,15 @@ textarea:focus, input:focus {
 .app-header {
   display: flex;
   align-items: center;
-  padding: 12px 24px;
+  padding: 8px 0 8px 24px;
   border-bottom: 1px solid var(--border);
   background: rgba(0,0,0,0.25);
   backdrop-filter: blur(12px);
   gap: 16px;
+  /* Custom title bar — Tauri decorations are disabled. The user drags the
+     window by anything tagged data-tauri-drag-region; the window controls on
+     the right opt out via pointer-events. */
+  user-select: none;
 }
 .app-header h1 {
   font-size: 18px;
@@ -96,6 +100,36 @@ textarea:focus, input:focus {
   color: var(--accent);
 }
 .app-header .spacer { flex: 1; }
+
+.window-controls {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+  margin-left: 8px;
+}
+.window-control {
+  width: 44px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--fg-dim);
+  cursor: pointer;
+  padding: 0;
+  border-radius: 0;
+  transition: background 0.1s ease, color 0.1s ease;
+}
+.window-control:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--fg);
+}
+.window-control-close:hover {
+  background: var(--danger);
+  color: white;
+}
+.window-control svg { display: block; }
 
 /* Setup screen */
 .setup {
@@ -449,21 +483,30 @@ textarea:focus, input:focus {
   flex: 0 0 auto;
 }
 
-/* Turn input row */
+/* Turn input row — single-line input that grows with content, buttons inline */
 .turn-input {
   display: flex;
   gap: 12px;
-  padding: 16px 24px;
+  padding: 12px 24px;
   border-top: 1px solid var(--border);
   background: rgba(0,0,0,0.3);
-  align-items: stretch;
+  align-items: flex-end;
 }
 .turn-input textarea {
-  min-height: 64px;
+  flex: 1 1 auto;
+  resize: none;
+  overflow-y: auto;
+  min-height: 38px;
   max-height: 240px;
+  padding: 8px 10px;
+  line-height: 1.4;
+  font-size: 14px;
 }
-.turn-input .actions { display: flex; flex-direction: column; gap: 8px; }
-.turn-input .actions button { white-space: nowrap; }
+.turn-input button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  align-self: stretch;
+}
 .recording { color: var(--danger); animation: pulse 1.2s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: 0.5; } }
 
